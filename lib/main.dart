@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:miniprojet/views/LoginScreen.dart';
+import 'package:miniprojet/views/SingUpScreen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -13,7 +14,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent,)),
       debugShowCheckedModeBanner: false,
-      home: Loginscreen(),
+      home: Singupscreen(),
     );
   }
 }
