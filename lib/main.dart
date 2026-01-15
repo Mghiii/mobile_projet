@@ -5,6 +5,10 @@ import 'package:miniprojet/views/ClientDashboard.dart';
 import 'package:miniprojet/views/LoginScreen.dart';
 import 'package:miniprojet/views/SingUpScreen.dart';
 import 'package:miniprojet/views/VendeurDashboard.dart';
+import 'package:miniprojet/views/ShoppingCartScreen.dart';
+import 'package:miniprojet/views/ProfileScreen.dart';
+import 'package:miniprojet/views/SettingsScreen.dart';
+import 'package:miniprojet/views/CategoriesScreen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,8 +58,15 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const Loginscreen(),
         '/signup': (context) => const Singupscreen(),
         '/admin': (context) => const AdminDashboard(),
-        '/client': (context) => const ClientDashboard(),
+        '/client': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          return ClientDashboard(initialCategory: args as String?);
+        },
         '/vendeur': (context) => const VendeurDashboard(),
+        '/cart': (context) => const ShoppingCartScreen(),
+        '/profile': (context) => const ProfileScreen(),
+        '/settings': (context) => const SettingsScreen(),
+        '/categories': (context) => const CategoriesScreen(),
       },
     );
   }

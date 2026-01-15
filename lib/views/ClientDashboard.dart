@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:miniprojet/services/database.dart';
+import 'package:miniprojet/services/ShoppingCartService.dart';
 
 class ClientDashboard extends StatefulWidget {
-  const ClientDashboard({super.key});
+  final String? initialCategory;
+  
+  const ClientDashboard({super.key, this.initialCategory});
 
   @override
   State<ClientDashboard> createState() => _ClientDashboardState();
 }
 
 class _ClientDashboardState extends State<ClientDashboard> {
+  final ShoppingCartService _cartService = ShoppingCartService();
   bool _isLoading = true;
   List<Map<String, dynamic>> _allProducts = [];
   List<Map<String, dynamic>> _filteredProducts = [];
@@ -49,8 +53,14 @@ class _ClientDashboardState extends State<ClientDashboard> {
     setState(() {
       _allProducts = products;
       _categories = categories;
-      _filteredProducts = products;
-      _selectedCategory = null;
+      _selectedCategory = widget.initialCategory;
+      if (widget.initialCategory != null) {
+        _filteredProducts = _allProducts
+            .where((p) => p['category']?.toString() == widget.initialCategory)
+            .toList();
+      } else {
+        _filteredProducts = products;
+      }
       _currentPage = 0;
       _isLoading = false;
     });
@@ -84,12 +94,208 @@ class _ClientDashboardState extends State<ClientDashboard> {
     });
   }
 
+  Widget _buildDrawer(BuildContext context, Map<String, dynamic>? currentUser) {
+    return Drawer(
+      backgroundColor: Colors.grey.shade900,
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          // En-tête du drawer avec profil
+          DrawerHeader(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.blueAccent,
+                  Colors.blue.shade700,
+                ],
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.2),
+                  ),
+                  child: const Icon(
+                    Icons.person,
+                    size: 30,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  currentUser != null
+                      ? (currentUser['firstName'] != null || currentUser['lastName'] != null
+                          ? '${currentUser['firstName'] ?? ''} ${currentUser['lastName'] ?? ''}'.trim()
+                          : currentUser['username'] ?? currentUser['email'] ?? 'Utilisateur')
+                      : 'Utilisateur',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  currentUser?['email'] ?? 'email@example.com',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Section Profil
+          ListTile(
+            leading: const Icon(Icons.person, color: Colors.blueAccent),
+            title: const Text('Mon Profil', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).pushNamed('/profile');
+            },
+          ),
+          // Section Paramètres
+          ListTile(
+            leading: const Icon(Icons.settings, color: Colors.blueAccent),
+            title: const Text('Paramètres', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).pushNamed('/settings');
+            },
+          ),
+          const Divider(color: Colors.grey),
+          // Liens rapides
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(
+              'Liens rapides',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.shopping_cart, color: Colors.blueAccent),
+            title: const Text('Mon Panier', style: TextStyle(color: Colors.white)),
+            trailing: ValueListenableBuilder<List<Map<String, dynamic>>>(
+              valueListenable: _cartService.cart,
+              builder: (context, cartItems, child) {
+                return cartItems.isNotEmpty
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blueAccent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${cartItems.length}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink();
+              },
+            ),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).pushNamed('/cart');
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.home, color: Colors.blueAccent),
+            title: const Text('Accueil', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.category, color: Colors.blueAccent),
+            title: const Text('Catégories', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).pushNamed('/categories');
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.favorite, color: Colors.blueAccent),
+            title: const Text('Favoris', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Fonctionnalité à venir'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.history, color: Colors.blueAccent),
+            title: const Text('Historique', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Fonctionnalité à venir'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+          const Divider(color: Colors.grey),
+          // Déconnexion
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text('Déconnexion', style: TextStyle(color: Colors.red)),
+            onTap: () {
+              Navigator.pop(context);
+              MongoDatabase.logout();
+              Navigator.of(context).pushReplacementNamed('/login');
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final currentUser = MongoDatabase.currentUser;
+    
     return Scaffold(
+      drawer: _buildDrawer(context, currentUser),
       appBar: AppBar(
         title: const Text('Boutique'),
         actions: [
+          ValueListenableBuilder<List<Map<String, dynamic>>>(
+            valueListenable: _cartService.cart,
+            builder: (context, cartItems, child) {
+              return Badge(
+                label: Text(cartItems.length.toString()),
+                isLabelVisible: cartItems.isNotEmpty,
+                child: IconButton(
+                  icon: const Icon(Icons.shopping_cart),
+                  tooltip: 'Voir le panier',
+                  onPressed: () {
+                    Navigator.of(context).pushNamed('/cart');
+                  },
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Rafraîchir les produits',
@@ -224,7 +430,7 @@ class _ClientDashboardState extends State<ClientDashboard> {
                               padding: const EdgeInsets.all(8),
                               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 2,
-                                childAspectRatio: 0.62,
+                                childAspectRatio: 0.58,
                                 crossAxisSpacing: 10,
                                 mainAxisSpacing: 10,
                               ),
@@ -536,6 +742,38 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                                 ],
                                               ),
                                             ],
+                                          ),
+                                        ),
+                                      ),
+                                      // Bouton Ajouter au panier
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                                        child: SizedBox(
+                                          width: double.infinity,
+                                          child: ElevatedButton.icon(
+                                            onPressed: () {
+                                              _cartService.addToCart(p);
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text('${p['title']} ajouté au panier!'),
+                                                  duration: const Duration(seconds: 2),
+                                                  backgroundColor: Colors.green,
+                                                ),
+                                              );
+                                            },
+                                            icon: const Icon(Icons.add_shopping_cart, size: 16),
+                                            label: const Text(
+                                              'Ajouter au panier',
+                                              style: TextStyle(fontSize: 12),
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.blueAccent,
+                                              foregroundColor: Colors.white,
+                                              padding: const EdgeInsets.symmetric(vertical: 6),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
