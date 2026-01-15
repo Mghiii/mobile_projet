@@ -9,6 +9,8 @@ import 'package:miniprojet/views/ShoppingCartScreen.dart';
 import 'package:miniprojet/views/ProfileScreen.dart';
 import 'package:miniprojet/views/SettingsScreen.dart';
 import 'package:miniprojet/views/CategoriesScreen.dart';
+import 'package:miniprojet/views/FavoritesScreen.dart';
+import 'package:miniprojet/views/SearchHistoryScreen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,13 +62,20 @@ class MyApp extends StatelessWidget {
         '/admin': (context) => const AdminDashboard(),
         '/client': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
-          return ClientDashboard(initialCategory: args as String?);
+          if (args is Map && args['search'] != null) {
+            return ClientDashboard(initialCategory: null);
+          } else if (args is String) {
+            return ClientDashboard(initialCategory: args);
+          }
+          return ClientDashboard(initialCategory: null);
         },
         '/vendeur': (context) => const VendeurDashboard(),
         '/cart': (context) => const ShoppingCartScreen(),
         '/profile': (context) => const ProfileScreen(),
         '/settings': (context) => const SettingsScreen(),
         '/categories': (context) => const CategoriesScreen(),
+        '/favorites': (context) => const FavoritesScreen(),
+        '/search-history': (context) => const SearchHistoryScreen(),
       },
     );
   }

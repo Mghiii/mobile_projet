@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:miniprojet/services/database.dart';
 import 'package:miniprojet/services/ShoppingCartService.dart';
+import 'package:miniprojet/services/FavoritesService.dart';
 
 class ClientDashboard extends StatefulWidget {
   final String? initialCategory;
@@ -13,11 +14,15 @@ class ClientDashboard extends StatefulWidget {
 
 class _ClientDashboardState extends State<ClientDashboard> {
   final ShoppingCartService _cartService = ShoppingCartService();
+  final FavoritesService _favoritesService = FavoritesService();
+  final TextEditingController _searchController = TextEditingController();
   bool _isLoading = true;
   List<Map<String, dynamic>> _allProducts = [];
   List<Map<String, dynamic>> _filteredProducts = [];
   List<String> _categories = [];
   String? _selectedCategory;
+  String _searchQuery = '';
+  bool _isSearching = false;
   
   // Pagination
   final int _itemsPerPage = 12;
@@ -27,6 +32,29 @@ class _ClientDashboardState extends State<ClientDashboard> {
   void initState() {
     super.initState();
     _loadProducts();
+    
+    // Vérifier si un argument de recherche a été passé
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args != null) {
+        if (args is Map && args['search'] != null) {
+          final searchQuery = args['search'] as String;
+          _searchController.text = searchQuery;
+          _searchQuery = searchQuery;
+          _performSearch(searchQuery);
+        } else if (args is String) {
+          // Catégorie passée
+          _selectedCategory = args;
+          _filterByCategory(args);
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadProducts() async {
@@ -64,11 +92,19 @@ class _ClientDashboardState extends State<ClientDashboard> {
       _currentPage = 0;
       _isLoading = false;
     });
+    
+    // Appliquer la recherche si elle existe
+    if (_searchQuery.isNotEmpty) {
+      _performSearch(_searchQuery);
+    }
   }
 
   void _filterByCategory(String? category) {
     setState(() {
       _selectedCategory = category;
+      _searchQuery = '';
+      _searchController.clear();
+      _isSearching = false;
       if (category == null) {
         _filteredProducts = _allProducts;
       } else {
@@ -77,6 +113,44 @@ class _ClientDashboardState extends State<ClientDashboard> {
             .toList();
       }
       _currentPage = 0; // Reset à la première page
+    });
+  }
+
+  void _performSearch(String query) {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _searchQuery = '';
+        _isSearching = false;
+        _selectedCategory = null;
+        _filteredProducts = _allProducts;
+        _currentPage = 0;
+      });
+      return;
+    }
+
+    // Sauvegarder dans l'historique
+    _favoritesService.addToSearchHistory(query);
+
+    setState(() {
+      _searchQuery = query.trim();
+      _isSearching = true;
+      _selectedCategory = null;
+      
+      // Rechercher dans le titre, la description et la catégorie
+      _filteredProducts = _allProducts.where((product) {
+        final title = (product['title'] ?? '').toString().toLowerCase();
+        final description = (product['description'] ?? '').toString().toLowerCase();
+        final category = (product['category'] ?? '').toString().toLowerCase();
+        final brand = (product['brand'] ?? '').toString().toLowerCase();
+        final searchLower = query.toLowerCase();
+        
+        return title.contains(searchLower) ||
+            description.contains(searchLower) ||
+            category.contains(searchLower) ||
+            brand.contains(searchLower);
+      }).toList();
+      
+      _currentPage = 0;
     });
   }
 
@@ -234,12 +308,7 @@ class _ClientDashboardState extends State<ClientDashboard> {
             title: const Text('Favoris', style: TextStyle(color: Colors.white)),
             onTap: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Fonctionnalité à venir'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              Navigator.of(context).pushNamed('/favorites');
             },
           ),
           ListTile(
@@ -247,12 +316,7 @@ class _ClientDashboardState extends State<ClientDashboard> {
             title: const Text('Historique', style: TextStyle(color: Colors.white)),
             onTap: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Fonctionnalité à venir'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              Navigator.of(context).pushNamed('/search-history');
             },
           ),
           const Divider(color: Colors.grey),
@@ -346,6 +410,76 @@ class _ClientDashboardState extends State<ClientDashboard> {
                       )
                     : Column(
                       children: [
+                        // Barre de recherche
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          color: Colors.black,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade900,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: _isSearching
+                                          ? Colors.blueAccent
+                                          : Colors.grey.shade700,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: TextField(
+                                    controller: _searchController,
+                                    style: const TextStyle(color: Colors.white),
+                                    decoration: InputDecoration(
+                                      hintText: 'Rechercher un produit...',
+                                      hintStyle: TextStyle(color: Colors.grey.shade500),
+                                      prefixIcon: const Icon(
+                                        Icons.search,
+                                        color: Colors.blueAccent,
+                                      ),
+                                      suffixIcon: _searchController.text.isNotEmpty
+                                          ? IconButton(
+                                              icon: const Icon(
+                                                Icons.clear,
+                                                color: Colors.grey,
+                                              ),
+                                              onPressed: () {
+                                                _searchController.clear();
+                                                _performSearch('');
+                                              },
+                                            )
+                                          : null,
+                                      border: InputBorder.none,
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                    onSubmitted: (value) {
+                                      _performSearch(value);
+                                    },
+                                    onChanged: (value) {
+                                      if (value.isEmpty) {
+                                        _performSearch('');
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Bouton historique
+                              IconButton(
+                                icon: const Icon(Icons.history),
+                                color: Colors.blueAccent,
+                                tooltip: 'Historique de recherche',
+                                onPressed: () {
+                                  Navigator.of(context).pushNamed('/search-history');
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
                         // Panneau de catégories
                         Container(
                           height: 60,
@@ -360,12 +494,15 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                 padding: const EdgeInsets.only(right: 8),
                                 child: FilterChip(
                                   label: const Text('Tous', style: TextStyle(color: Colors.white)),
-                                  selected: _selectedCategory == null,
+                                  selected: _selectedCategory == null && !_isSearching,
                                   selectedColor: Colors.blueAccent,
                                   checkmarkColor: Colors.white,
                                   backgroundColor: Colors.grey.shade800,
-                                  onSelected: (_) => _filterByCategory(null),
-                                  avatar: _selectedCategory == null
+                                  onSelected: (_) {
+                                    _searchController.clear();
+                                    _filterByCategory(null);
+                                  },
+                                  avatar: _selectedCategory == null && !_isSearching
                                       ? const Icon(Icons.check, size: 18, color: Colors.white)
                                       : null,
                                 ),
@@ -402,7 +539,33 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              if (_selectedCategory != null)
+                              if (_isSearching)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: Chip(
+                                    backgroundColor: Colors.blueAccent.withValues(alpha: 0.2),
+                                    label: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.search, size: 14, color: Colors.blueAccent),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            'Recherche: $_searchQuery',
+                                            style: const TextStyle(fontSize: 12, color: Colors.blueAccent),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    onDeleted: () {
+                                      _searchController.clear();
+                                      _performSearch('');
+                                    },
+                                    deleteIcon: const Icon(Icons.close, size: 18, color: Colors.blueAccent),
+                                  ),
+                                )
+                              else if (_selectedCategory != null)
                                 Padding(
                                   padding: const EdgeInsets.only(left: 8),
                                   child: Chip(
@@ -580,6 +743,53 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                                   ),
                                                 ),
                                               ),
+                                            // Bouton favori
+                                            Positioned(
+                                              bottom: 10,
+                                              right: 10,
+                                              child: ValueListenableBuilder<List<Map<String, dynamic>>>(
+                                                valueListenable: _favoritesService.favorites,
+                                                builder: (context, favorites, child) {
+                                                  final isFavorite = _favoritesService.isFavorite(p);
+                                                  return Container(
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black.withValues(alpha: 0.6),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: IconButton(
+                                                      icon: Icon(
+                                                        isFavorite ? Icons.favorite : Icons.favorite_border,
+                                                        color: isFavorite ? Colors.red : Colors.white,
+                                                        size: 20,
+                                                      ),
+                                                      onPressed: () {
+                                                        if (isFavorite) {
+                                                          _favoritesService.removeFromFavorites(p);
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            SnackBar(
+                                                              content: Text('${p['title']} retiré des favoris'),
+                                                              duration: const Duration(seconds: 2),
+                                                              backgroundColor: Colors.red,
+                                                            ),
+                                                          );
+                                                        } else {
+                                                          _favoritesService.addToFavorites(p);
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            SnackBar(
+                                                              content: Text('${p['title']} ajouté aux favoris'),
+                                                              duration: const Duration(seconds: 2),
+                                                              backgroundColor: Colors.green,
+                                                            ),
+                                                          );
+                                                        }
+                                                      },
+                                                      padding: const EdgeInsets.all(8),
+                                                      constraints: const BoxConstraints(),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            ),
                                             // Rating badge en haut à gauche
                                             if (rating['rate'] != null)
                                               Positioned(

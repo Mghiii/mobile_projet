@@ -1,1 +1,200 @@
-import \'package:flutter/material.dart\';\nimport \'package:miniprojet/services/shopping_cart_service.dart\';\nimport \'package:miniprojet/services/database.dart\';\nimport \'package:miniprojet/widgets/product_card.dart\';\nimport \'package:miniprojet/views/shopping_cart_screen.dart\';\nimport \'package:mongo_dart/mongo_dart.dart\' show where;\n\nclass ClientDashboard extends StatefulWidget {\n  const ClientDashboard({super.key});\n\n  @override\n  State<ClientDashboard> createState() => _ClientDashboardState();\n}\n\nclass _ClientDashboardState extends State<ClientDashboard> {\n  final ShoppingCartService _cartService = ShoppingCartService();\n\n  List<String> _categories = [];\n  String? _selectedCategory;\n  List<Map<String, dynamic>> _products = [];\n\n  bool _isLoading = true;\n  int _currentPage = 1;\n  final int _pageSize = 10;\n  bool _hasMoreProducts = true;\n\n  @override\n  void initState() {\n    super.initState();\n    _loadInitialData();\n  }\n\n  Future<void> _loadInitialData() async {\n    await _fetchCategories();\n    await _fetchProducts(page: 1);\n  }\n\n  Future<void> _fetchCategories() async {\n    if (MongoDatabase.productCollection == null) return;\n    try {\n      final categories = await MongoDatabase.productCollection!.distinct(\'category\');\n      if (!mounted) return;\n      setState(() {\n        _categories = categories[\'values\'].cast<String>()..sort();\n        _categories.insert(0, \'Toutes les catégories\');\n        _selectedCategory = \'Toutes les catégories\';\n      });\n    } catch (e) {\n      // Gérer l\'erreur\n    }\n  }\n\n  Future<void> _fetchProducts({required int page, bool loadMore = false}) async {\n    if (MongoDatabase.productCollection == null || (!_hasMoreProducts && loadMore)) return;\n\n    setState(() {\n      _isLoading = true;\n    });\n\n    try {\n      final query = _selectedCategory == null || _selectedCategory == \'Toutes les catégories\'\n          ? where\n          : where.eq(\'category\', _selectedCategory);\n\n      final products = await MongoDatabase.productCollection!\n          .find(query.limit(_pageSize).skip((page - 1) * _pageSize))\n          .toList();\n\n      if (!mounted) return;\n      setState(() {\n        if (loadMore) {\n          _products.addAll(products);\n        } else {\n          _products = products;\n        }\n        _currentPage = page;\n        _hasMoreProducts = products.length == _pageSize;\n        _isLoading = false;\n      });\n    } catch (e) {\n      if (!mounted) return;\n      setState(() {\n        _isLoading = false;\n      });\n    }\n  }\n\n  @override\n  Widget build(BuildContext context) {\n    return Scaffold(\n      appBar: AppBar(\n        title: const Text(\'Espace Client\'),\n        actions: [\n          ValueListenableBuilder<List<Map<String, dynamic>>>(\n            valueListenable: _cartService.cart,\n            builder: (context, cartItems, child) {\n              return Badge(\n                label: Text(cartItems.length.toString()),\n                isLabelVisible: cartItems.isNotEmpty,\n                child: IconButton(\n                  icon: const Icon(Icons.shopping_cart),\n                  onPressed: () {\n                    Navigator.of(context).pushNamed(\'/cart\');\n                  },\n                ),\n              );\n            },\n          )\n        ],\n      ),\n      body: Column(\n        children: [\n          _buildCategoryFilter(),\n          Expanded(\n            child: _isLoading && _products.isEmpty\n                ? const Center(child: CircularProgressIndicator())\n                : _buildProductsGrid(),\n          ),\n          _buildPaginationControls(),\n        ],\n      ),\n    );\n  }\n\n  Widget _buildCategoryFilter() {\n    return Padding(\n      padding: const EdgeInsets.all(8.0),\n      child: DropdownButton<String>(\n        value: _selectedCategory,\n        isExpanded: true,\n        items: _categories.map((String category) {\n          return DropdownMenuItem<String>(\n            value: category,\n            child: Text(category),\n          );\n        }).toList(),\n        onChanged: (String? newValue) {\n          setState(() {\n            _selectedCategory = newValue;\n            _hasMoreProducts = true;\n          });\n          _fetchProducts(page: 1);\n        },\n      ),\n    );\n  }\n\n  Widget _buildProductsGrid() {\n    return GridView.builder(\n      padding: const EdgeInsets.all(8.0),\n      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(\n        crossAxisCount: 2,\n        childAspectRatio: 0.7,\n        crossAxisSpacing: 10,\n        mainAxisSpacing: 10,\n      ),\n      itemCount: _products.length,\n      itemBuilder: (context, index) {\n        final product = _products[index];\n        return ProductCard(\n          product: product,\n          onAddToCart: () {\n            _cartService.addToCart(product);\n            ScaffoldMessenger.of(context).showSnackBar(\n              SnackBar(\n                content: Text(\"${product[\'title\']} ajouté au panier!\"),\n                duration: const Duration(seconds: 2),\n              ),\n            );\n          },\n        );\n      },\n    );\n  }\n\n  Widget _buildPaginationControls() {\n    return Padding(\n      padding: const EdgeInsets.symmetric(vertical: 8.0),\n      child: Row(\n        mainAxisAlignment: MainAxisAlignment.center,\n        children: [\n          ElevatedButton(\n            onPressed: _currentPage > 1 ? () => _fetchProducts(page: _currentPage - 1) : null,\n            child: const Text(\'Précédent\'),\n          ),\n          Padding(\n            padding: const EdgeInsets.symmetric(horizontal: 16.0),\n            child: Text(\'Page $_currentPage\'),\n          ),\n          ElevatedButton(\n            onPressed: _hasMoreProducts && !_isLoading ? () => _fetchProducts(page: _currentPage + 1, loadMore: false) : null,\n            child: const Text(\'Suivant\'),\n          ),\n        ],\n      ),\n    );\n  }\n}\n
+/*
+import 'package:flutter/material.dart';
+import 'package:miniprojet/services/shopping_cart_service.dart';
+import 'package:miniprojet/services/database.dart';
+import 'package:miniprojet/widgets/product_card.dart';
+import 'package:miniprojet/views/shopping_cart_screen.dart';
+import 'package:mongo_dart/mongo_dart.dart' show where;
+
+class ClientDashboard extends StatefulWidget {
+  const ClientDashboard({super.key});
+
+  @override
+  State<ClientDashboard> createState() => _ClientDashboardState();
+}
+
+class _ClientDashboardState extends State<ClientDashboard> {
+  final ShoppingCartService _cartService = ShoppingCartService();
+
+  List<String> _categories = [];
+  String? _selectedCategory;
+  List<Map<String, dynamic>> _products = [];
+
+  bool _isLoading = true;
+  int _currentPage = 1;
+  final int _pageSize = 10;
+  bool _hasMoreProducts = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    await _fetchCategories();
+    await _fetchProducts(page: 1);
+  }
+
+  Future<void> _fetchCategories() async {
+    if (MongoDatabase.productCollection == null) return;
+    try {
+      final categories = await MongoDatabase.productCollection!.distinct('category');
+      if (!mounted) return;
+      setState(() {
+        _categories = categories['values'].cast<String>()..sort();
+        _categories.insert(0, 'Toutes les catégories');
+        _selectedCategory = 'Toutes les catégories';
+      });
+    } catch (e) {
+      // Gérer l'erreur
+    }
+  }
+
+  Future<void> _fetchProducts({required int page, bool loadMore = false}) async {
+    if (MongoDatabase.productCollection == null || (!_hasMoreProducts && loadMore)) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final query = _selectedCategory == null || _selectedCategory == 'Toutes les catégories'
+          ? where
+          : where.eq('category', _selectedCategory);
+
+      final products = await MongoDatabase.productCollection!
+          .find(query.limit(_pageSize).skip((page - 1) * _pageSize))
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        if (loadMore) {
+          _products.addAll(products);
+        } else {
+          _products = products;
+        }
+        _currentPage = page;
+        _hasMoreProducts = products.length == _pageSize;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Espace Client'),
+        actions: [
+          ValueListenableBuilder<List<Map<String, dynamic>>>(
+            valueListenable: _cartService.cart,
+            builder: (context, cartItems, child) {
+              return Badge(
+                label: Text(cartItems.length.toString()),
+                isLabelVisible: cartItems.isNotEmpty,
+                child: IconButton(
+                  icon: const Icon(Icons.shopping_cart),
+                  onPressed: () {
+                    Navigator.of(context).pushNamed('/cart');
+                  },
+                ),
+              );
+            },
+          )
+        ],
+      ),
+      body: Column(
+        children: [
+          _buildCategoryFilter(),
+          Expanded(
+            child: _isLoading && _products.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : _buildProductsGrid(),
+          ),
+          _buildPaginationControls(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryFilter() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: DropdownButton<String>(
+        value: _selectedCategory,
+        isExpanded: true,
+        items: _categories.map((String category) {
+          return DropdownMenuItem<String>(
+            value: category,
+            child: Text(category),
+          );
+        }).toList(),
+        onChanged: (String? newValue) {
+          setState(() {
+            _selectedCategory = newValue;
+            _hasMoreProducts = true;
+          });
+          _fetchProducts(page: 1);
+        },
+      ),
+    );
+  }
+
+  Widget _buildProductsGrid() {
+    return GridView.builder(
+      padding: const EdgeInsets.all(8.0),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.7,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: _products.length,
+      itemBuilder: (context, index) {
+        final product = _products[index];
+        return ProductCard(
+          product: product,
+          onAddToCart: () {
+            _cartService.addToCart(product);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("${product['title']} ajouté au panier!"),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPaginationControls() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ElevatedButton(
+            onPressed: _currentPage > 1 ? () => _fetchProducts(page: _currentPage - 1) : null,
+            child: const Text('Précédent'),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text('Page $_currentPage'),
+          ),
+          ElevatedButton(
+            onPressed: _hasMoreProducts && !_isLoading ? () => _fetchProducts(page: _currentPage + 1, loadMore: false) : null,
+            child: const Text('Suivant'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+*/
