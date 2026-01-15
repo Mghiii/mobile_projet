@@ -455,6 +455,65 @@ class MongoDatabase {
     }
   }
 
+  /// Met à jour un produit dans la collection
+  static Future<bool> updateProduct(dynamic productId, Map<String, dynamic> updates) async {
+    if (productCollection == null) {
+      return false;
+    }
+
+    try {
+      // Gérer différents types d'ID (ObjectId ou String)
+      dynamic idToUpdate;
+      if (productId is String) {
+        try {
+          idToUpdate = ObjectId.fromHexString(productId);
+        } catch (e) {
+          // Si ce n'est pas un ObjectId hex, utiliser directement la string
+          idToUpdate = productId;
+        }
+      } else {
+        idToUpdate = productId;
+      }
+      
+      await productCollection!.updateOne(
+        {'_id': idToUpdate},
+        {'\$set': updates},
+      );
+      return true;
+    } catch (e) {
+      print("✗ Erreur lors de la mise à jour du produit: $e");
+      return false;
+    }
+  }
+
+  /// Supprime un produit de la collection
+  static Future<bool> deleteProduct(dynamic productId) async {
+    if (productCollection == null) {
+      return false;
+    }
+
+    try {
+      // Gérer différents types d'ID (ObjectId ou String)
+      dynamic idToDelete;
+      if (productId is String) {
+        try {
+          idToDelete = ObjectId.fromHexString(productId);
+        } catch (e) {
+          // Si ce n'est pas un ObjectId hex, utiliser directement la string
+          idToDelete = productId;
+        }
+      } else {
+        idToDelete = productId;
+      }
+      
+      await productCollection!.deleteOne({'_id': idToDelete});
+      return true;
+    } catch (e) {
+      print("✗ Erreur lors de la suppression du produit: $e");
+      return false;
+    }
+  }
+
   /// Déconnecte l'utilisateur actuel
   static void logout() {
     currentUser = null;

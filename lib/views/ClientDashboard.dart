@@ -68,6 +68,16 @@ class _ClientDashboardState extends State<ClientDashboard> {
     final products =
         await MongoDatabase.productCollection.find().toList() as List<Map<String, dynamic>>;
 
+    // Trier les produits par date de création (les plus récents en premier)
+    products.sort((a, b) {
+      final aDate = a['createdAt'] as String?;
+      final bDate = b['createdAt'] as String?;
+      if (aDate == null && bDate == null) return 0;
+      if (aDate == null) return 1; // Les produits sans date à la fin
+      if (bDate == null) return -1; // Les produits avec date en premier
+      return bDate.compareTo(aDate); // Décroissant (plus récent en premier)
+    });
+
     // Extraire les catégories uniques
     final categoriesSet = <String>{};
     for (var product in products) {
@@ -149,6 +159,16 @@ class _ClientDashboardState extends State<ClientDashboard> {
             category.contains(searchLower) ||
             brand.contains(searchLower);
       }).toList();
+      
+      // Trier les résultats de recherche par date de création aussi
+      _filteredProducts.sort((a, b) {
+        final aDate = a['createdAt'] as String?;
+        final bDate = b['createdAt'] as String?;
+        if (aDate == null && bDate == null) return 0;
+        if (aDate == null) return 1;
+        if (bDate == null) return -1;
+        return bDate.compareTo(aDate);
+      });
       
       _currentPage = 0;
     });
