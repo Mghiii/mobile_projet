@@ -21,13 +21,13 @@ class _VendeurEditProductScreenState extends State<VendeurEditProductScreen> {
   late TextEditingController _categoryController;
   late TextEditingController _imageUrlController;
   late TextEditingController _ratingController;
-  
+
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    // Initialiser les contrôleurs avec les valeurs existantes
+    // Initialize controllers with existing values
     _titleController = TextEditingController(text: widget.product['title']?.toString() ?? '');
     _descriptionController = TextEditingController(text: widget.product['description']?.toString() ?? '');
     _priceController = TextEditingController(text: widget.product['price']?.toString() ?? '');
@@ -36,9 +36,15 @@ class _VendeurEditProductScreenState extends State<VendeurEditProductScreen> {
     _brandController = TextEditingController(text: widget.product['brand']?.toString() ?? '');
     _categoryController = TextEditingController(text: widget.product['category']?.toString() ?? '');
     _imageUrlController = TextEditingController(text: widget.product['image']?.toString() ?? '');
-    
-    final rating = widget.product['rating'] as Map<String, dynamic>?;
-    _ratingController = TextEditingController(text: rating?['rate']?.toString() ?? '');
+
+    // Safely handle the rating map
+    dynamic ratingData = widget.product['rating'];
+    String initialRating = '';
+
+    if (ratingData is Map) {
+      initialRating = ratingData['rate']?.toString() ?? '';
+    }
+    _ratingController = TextEditingController(text: initialRating);
   }
 
   @override
@@ -60,10 +66,11 @@ class _VendeurEditProductScreenState extends State<VendeurEditProductScreen> {
       return;
     }
 
-    if (MongoDatabase.productCollection == null || MongoDatabase.currentUser == null) {
+    // UPDATED: Only check for currentUser. Firestore is always "connected".
+    if (MongoDatabase.currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Erreur: Base de données non connectée'),
+          content: Text('Erreur: Vous devez être connecté'),
           backgroundColor: Colors.red,
         ),
       );
@@ -75,7 +82,9 @@ class _VendeurEditProductScreenState extends State<VendeurEditProductScreen> {
     });
 
     try {
-      final productId = widget.product['_id'];
+      // UPDATED: Firestore IDs are always Strings.
+      final productId = widget.product['_id']?.toString();
+
       if (productId == null) {
         throw Exception('ID du produit introuvable');
       }
@@ -84,6 +93,12 @@ class _VendeurEditProductScreenState extends State<VendeurEditProductScreen> {
       final discount = double.tryParse(_discountController.text) ?? 0.0;
       final stock = int.tryParse(_stockController.text) ?? 0;
       final rating = double.tryParse(_ratingController.text) ?? 0.0;
+
+      // Preserve existing rating count if possible
+      int ratingCount = 0;
+      if (widget.product['rating'] is Map) {
+        ratingCount = widget.product['rating']['count'] ?? 0;
+      }
 
       final updatedProduct = {
         'title': _titleController.text.trim(),
@@ -96,11 +111,17 @@ class _VendeurEditProductScreenState extends State<VendeurEditProductScreen> {
         'image': _imageUrlController.text.trim(),
         'rating': {
           'rate': rating,
-          'count': widget.product['rating']?['count'] ?? 0,
+          'count': ratingCount,
         },
+        // We do not update 'createdAt', 'vendeurId', etc.
       };
 
-      await MongoDatabase.updateProduct(productId, updatedProduct);
+      // UPDATED: Calls the static method we defined in database.dart
+      bool success = await MongoDatabase.updateProduct(productId, updatedProduct);
+
+      if (!success) {
+        throw Exception("Échec de la mise à jour dans Firestore");
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -110,7 +131,7 @@ class _VendeurEditProductScreenState extends State<VendeurEditProductScreen> {
             duration: Duration(seconds: 2),
           ),
         );
-        Navigator.of(context).pop(true); // Retourner true pour indiquer le succès
+        Navigator.of(context).pop(true); // Return true to trigger refresh
       }
     } catch (e) {
       if (mounted) {
@@ -299,17 +320,17 @@ class _VendeurEditProductScreenState extends State<VendeurEditProductScreen> {
                     ),
                     child: _isLoading
                         ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
                         : const Text(
-                            'Enregistrer les modifications',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
+                      'Enregistrer les modifications',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ],
               ),

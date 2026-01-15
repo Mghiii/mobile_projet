@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:miniprojet/widgets/TextFieldExe.dart';
 import 'package:miniprojet/services/database.dart';
-import 'package:mongo_dart/mongo_dart.dart' hide State;
 
 class Singupscreen extends StatefulWidget {
   const Singupscreen({super.key});
@@ -20,7 +19,7 @@ class _SingupscreenState extends State<Singupscreen> {
   bool _isLoading = false;
 
   Future<void> _signUp() async {
-    if (MongoDatabase.userCollection == null) {
+    if (!MongoDatabase.isConnected) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Erreur de base de données. Veuillez redémarrer l\'application.'),
@@ -48,11 +47,12 @@ class _SingupscreenState extends State<Singupscreen> {
 
     try {
       // Vérifier si l'email existe déjà
-      var existingUser = await MongoDatabase.userCollection.findOne({
-        'email': emailController.text.trim(),
-      });
+      final existingUser = await MongoDatabase.db
+          .collection(MongoDatabase.userCollectionName)
+          .where('email', isEqualTo: emailController.text.trim())
+          .get();
 
-      if (existingUser != null) {
+      if (existingUser.docs.isNotEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -68,8 +68,7 @@ class _SingupscreenState extends State<Singupscreen> {
       }
 
       // Créer le nouvel utilisateur
-      await MongoDatabase.userCollection.insert({
-        '_id': ObjectId(),
+      await MongoDatabase.db.collection(MongoDatabase.userCollectionName).add({
         'email': emailController.text.trim(),
         'password': pwdController.text, // You should hash this password
         'role': selectedRole,
@@ -189,7 +188,7 @@ class _SingupscreenState extends State<Singupscreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _isLoading || MongoDatabase.userCollection == null ? null : _signUp,
+                  onPressed: _isLoading || !MongoDatabase.isConnected ? null : _signUp,
                   child: _isLoading
                       ? const SizedBox(
                           height: 20,
@@ -208,7 +207,7 @@ class _SingupscreenState extends State<Singupscreen> {
                         ),
                 ),
               ),
-              if (MongoDatabase.userCollection == null)
+              if (!MongoDatabase.isConnected)
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Text(

@@ -33,7 +33,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
     super.initState();
     _loadProducts();
     
-    // Vérifier si un argument de recherche a été passé
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args != null) {
@@ -43,7 +42,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
           _searchQuery = searchQuery;
           _performSearch(searchQuery);
         } else if (args is String) {
-          // Catégorie passée
           _selectedCategory = args;
           _filterByCategory(args);
         }
@@ -58,27 +56,29 @@ class _ClientDashboardState extends State<ClientDashboard> {
   }
 
   Future<void> _loadProducts() async {
-    if (MongoDatabase.productCollection == null) {
+    if (!MongoDatabase.isConnected) {
       setState(() {
         _isLoading = false;
       });
       return;
     }
 
-    final products =
-        await MongoDatabase.productCollection.find().toList() as List<Map<String, dynamic>>;
+    final snapshot = await MongoDatabase.db.collection(MongoDatabase.productCollectionName).get();
+    final products = snapshot.docs.map((doc) {
+      final data = doc.data();
+      data['_id'] = doc.id;
+      return data;
+    }).toList();
 
-    // Trier les produits par date de création (les plus récents en premier)
     products.sort((a, b) {
-      final aDate = a['createdAt'] as String?;
-      final bDate = b['createdAt'] as String?;
+      final aDate = a['createdAt'];
+      final bDate = b['createdAt'];
       if (aDate == null && bDate == null) return 0;
-      if (aDate == null) return 1; // Les produits sans date à la fin
-      if (bDate == null) return -1; // Les produits avec date en premier
-      return bDate.compareTo(aDate); // Décroissant (plus récent en premier)
+      if (aDate == null) return 1;
+      if (bDate == null) return -1;
+      return (bDate as Comparable).compareTo(aDate);
     });
 
-    // Extraire les catégories uniques
     final categoriesSet = <String>{};
     for (var product in products) {
       final category = product['category']?.toString();
@@ -103,7 +103,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
       _isLoading = false;
     });
     
-    // Appliquer la recherche si elle existe
     if (_searchQuery.isNotEmpty) {
       _performSearch(_searchQuery);
     }
@@ -122,7 +121,7 @@ class _ClientDashboardState extends State<ClientDashboard> {
             .where((p) => p['category']?.toString() == category)
             .toList();
       }
-      _currentPage = 0; // Reset à la première page
+      _currentPage = 0;
     });
   }
 
@@ -138,7 +137,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
       return;
     }
 
-    // Sauvegarder dans l'historique
     _favoritesService.addToSearchHistory(query);
 
     setState(() {
@@ -146,7 +144,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
       _isSearching = true;
       _selectedCategory = null;
       
-      // Rechercher dans le titre, la description et la catégorie
       _filteredProducts = _allProducts.where((product) {
         final title = (product['title'] ?? '').toString().toLowerCase();
         final description = (product['description'] ?? '').toString().toLowerCase();
@@ -160,14 +157,13 @@ class _ClientDashboardState extends State<ClientDashboard> {
             brand.contains(searchLower);
       }).toList();
       
-      // Trier les résultats de recherche par date de création aussi
       _filteredProducts.sort((a, b) {
-        final aDate = a['createdAt'] as String?;
-        final bDate = b['createdAt'] as String?;
+        final aDate = a['createdAt'];
+        final bDate = b['createdAt'];
         if (aDate == null && bDate == null) return 0;
         if (aDate == null) return 1;
         if (bDate == null) return -1;
-        return bDate.compareTo(aDate);
+        return (bDate as Comparable).compareTo(aDate);
       });
       
       _currentPage = 0;
@@ -194,7 +190,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // En-tête du drawer avec profil
           DrawerHeader(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -247,7 +242,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
               ],
             ),
           ),
-          // Section Profil
           ListTile(
             leading: const Icon(Icons.person, color: Colors.blueAccent),
             title: const Text('Mon Profil', style: TextStyle(color: Colors.white)),
@@ -256,7 +250,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
               Navigator.of(context).pushNamed('/profile');
             },
           ),
-          // Section Paramètres
           ListTile(
             leading: const Icon(Icons.settings, color: Colors.blueAccent),
             title: const Text('Paramètres', style: TextStyle(color: Colors.white)),
@@ -266,7 +259,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
             },
           ),
           const Divider(color: Colors.grey),
-          // Liens rapides
           const Padding(
             padding: EdgeInsets.all(16.0),
             child: Text(
@@ -340,7 +332,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
             },
           ),
           const Divider(color: Colors.grey),
-          // Déconnexion
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
             title: const Text('Déconnexion', style: TextStyle(color: Colors.red)),
@@ -403,7 +394,7 @@ class _ClientDashboardState extends State<ClientDashboard> {
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
                 ),
               )
-            : MongoDatabase.productCollection == null
+            : !MongoDatabase.isConnected
                 ? const Center(
                     child: Text(
                       'Base de données non connectée.\nLes produits ne peuvent pas être chargés.',
@@ -430,7 +421,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                       )
                     : Column(
                       children: [
-                        // Barre de recherche
                         Container(
                           padding: const EdgeInsets.all(16),
                           color: Colors.black,
@@ -488,7 +478,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              // Bouton historique
                               IconButton(
                                 icon: const Icon(Icons.history),
                                 color: Colors.blueAccent,
@@ -500,7 +489,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                             ],
                           ),
                         ),
-                        // Panneau de catégories
                         Container(
                           height: 60,
                           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -509,7 +497,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                             scrollDirection: Axis.horizontal,
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             children: [
-                              // Bouton "Tous"
                               Padding(
                                 padding: const EdgeInsets.only(right: 8),
                                 child: FilterChip(
@@ -527,7 +514,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                       : null,
                                 ),
                               ),
-                              // Catégories
                               ..._categories.map((category) => Padding(
                                     padding: const EdgeInsets.only(right: 8),
                                     child: FilterChip(
@@ -545,7 +531,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                             ],
                           ),
                         ),
-                        // Compteur de résultats
                         Container(
                           color: Colors.black,
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -601,7 +586,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                             ],
                           ),
                         ),
-                        // Grille de produits (cartes)
                         Expanded(
                           child: Container(
                             color: Colors.black,
@@ -647,7 +631,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      // Image avec overlay moderne
                                       Expanded(
                                         flex: 3,
                                         child: Stack(
@@ -710,7 +693,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                                       ),
                                               ),
                                             ),
-                                            // Overlay gradient en bas de l'image
                                             Positioned(
                                               bottom: 0,
                                               left: 0,
@@ -729,7 +711,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                                 ),
                                               ),
                                             ),
-                                            // Badge de réduction moderne
                                             if (p['discountPercentage'] != null)
                                               Positioned(
                                                 top: 10,
@@ -763,7 +744,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                                   ),
                                                 ),
                                               ),
-                                            // Bouton favori
                                             Positioned(
                                               bottom: 10,
                                               right: 10,
@@ -810,7 +790,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                                 },
                                               ),
                                             ),
-                                            // Rating badge en haut à gauche
                                             if (rating['rate'] != null)
                                               Positioned(
                                                 top: 10,
@@ -846,7 +825,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                           ],
                                         ),
                                       ),
-                                      // Contenu de la carte avec style moderne
                                       Expanded(
                                         flex: 2,
                                         child: Container(
@@ -855,7 +833,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                             children: [
-                                              // Titre et Marque
                                               Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [
@@ -891,7 +868,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                                   ),
                                                 ],
                                               ),
-                                              // Prix et Stock
                                               Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [
@@ -975,7 +951,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                           ),
                                         ),
                                       ),
-                                      // Bouton Ajouter au panier
                                       Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
                                         child: SizedBox(
@@ -1015,7 +990,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                             ),
                           ),
                         ),
-                        // Pagination simplifiée
                         if (_totalPages > 1)
                           Container(
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
@@ -1032,7 +1006,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                // Bouton précédent
                                 IconButton(
                                   icon: const Icon(Icons.chevron_left, color: Colors.white),
                                   onPressed: _currentPage > 0
@@ -1046,24 +1019,18 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                // Afficher seulement les 3 premières pages (1, 2, 3)
-                                // ou les pages autour de la page actuelle si on est plus loin
                                 ...List.generate(
                                   _totalPages < 3 ? _totalPages : 3,
                                   (i) {
                                     int pageIndex;
                                     if (_currentPage < 2) {
-                                      // Si on est sur les premières pages, afficher 1, 2, 3
                                       pageIndex = i;
                                     } else if (_currentPage >= _totalPages - 2) {
-                                      // Si on est sur les dernières pages, afficher les 3 dernières
                                       pageIndex = _totalPages - 3 + i;
                                     } else {
-                                      // Sinon, afficher la page actuelle et les 2 autour
                                       pageIndex = _currentPage - 1 + i;
                                     }
                                     
-                                    // S'assurer qu'on ne dépasse pas les limites
                                     pageIndex = pageIndex.clamp(0, _totalPages - 1);
                                     
                                     return Padding(
@@ -1097,7 +1064,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
                                   },
                                 ),
                                 const SizedBox(width: 8),
-                                // Bouton suivant
                                 IconButton(
                                   icon: const Icon(Icons.chevron_right, color: Colors.white),
                                   onPressed: _currentPage < _totalPages - 1

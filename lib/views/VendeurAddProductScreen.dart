@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
 import 'package:flutter/material.dart';
 import 'package:miniprojet/services/database.dart';
 
@@ -19,7 +20,7 @@ class _VendeurAddProductScreenState extends State<VendeurAddProductScreen> {
   final _categoryController = TextEditingController();
   final _imageUrlController = TextEditingController();
   final _ratingController = TextEditingController();
-  
+
   bool _isLoading = false;
 
   @override
@@ -41,10 +42,11 @@ class _VendeurAddProductScreenState extends State<VendeurAddProductScreen> {
       return;
     }
 
-    if (MongoDatabase.productCollection == null || MongoDatabase.currentUser == null) {
+    // UPDATED: Check for current user only (Firestore db is always initialized)
+    if (MongoDatabase.currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Erreur: Base de données non connectée'),
+          content: Text('Erreur: Vous devez être connecté pour ajouter un produit'),
           backgroundColor: Colors.red,
         ),
       );
@@ -56,12 +58,16 @@ class _VendeurAddProductScreenState extends State<VendeurAddProductScreen> {
     });
 
     try {
-      final vendeurEmail = MongoDatabase.currentUser!['email']?.toString();
-      final vendeurId = MongoDatabase.currentUser!['_id']?.toString();
-      final firstName = MongoDatabase.currentUser!['firstName']?.toString() ?? '';
-      final lastName = MongoDatabase.currentUser!['lastName']?.toString() ?? '';
+      final currentUser = MongoDatabase.currentUser!;
+
+      // Prepare User Data
+      final vendeurEmail = currentUser['email']?.toString();
+      // Ensure we treat the ID as a string
+      final vendeurId = currentUser['_id']?.toString();
+      final firstName = currentUser['firstName']?.toString() ?? '';
+      final lastName = currentUser['lastName']?.toString() ?? '';
       final vendeurName = '$firstName $lastName'.trim();
-      
+
       final price = double.tryParse(_priceController.text) ?? 0.0;
       final discount = double.tryParse(_discountController.text) ?? 0.0;
       final stock = int.tryParse(_stockController.text) ?? 0;
@@ -82,11 +88,15 @@ class _VendeurAddProductScreenState extends State<VendeurAddProductScreen> {
         },
         'vendeurId': vendeurId,
         'vendeurEmail': vendeurEmail,
-        'vendeurName': vendeurName.isNotEmpty ? vendeurName : MongoDatabase.currentUser!['username']?.toString(),
-        'createdAt': DateTime.now().toIso8601String(), // Date de création pour trier
+        // Fallback to username if name is empty
+        'vendeurName': vendeurName.isNotEmpty ? vendeurName : currentUser['username']?.toString(),
+
+        // UPDATED: Use Firestore Server Timestamp
+        'createdAt': FieldValue.serverTimestamp(),
       };
 
-      await MongoDatabase.productCollection!.insertOne(newProduct);
+      // UPDATED: Firestore command to add document
+      await MongoDatabase.db.collection('products').add(newProduct);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -96,7 +106,7 @@ class _VendeurAddProductScreenState extends State<VendeurAddProductScreen> {
             duration: Duration(seconds: 2),
           ),
         );
-        Navigator.of(context).pop(true); // Retourner true pour indiquer le succès
+        Navigator.of(context).pop(true); // Return true to indicate success
       }
     } catch (e) {
       if (mounted) {
@@ -129,177 +139,177 @@ class _VendeurAddProductScreenState extends State<VendeurAddProductScreen> {
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildTextField(
-                  controller: _titleController,
-                  label: 'Titre du produit',
-                  icon: Icons.title,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Le titre est requis';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  controller: _descriptionController,
-                  label: 'Description',
-                  icon: Icons.description,
-                  maxLines: 3,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'La description est requise';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _priceController,
-                        label: 'Prix (\$)',
-                        icon: Icons.attach_money,
-                        keyboardType: TextInputType.number,
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Le prix est requis';
-                          }
-                          if (double.tryParse(value) == null || double.parse(value) <= 0) {
-                            return 'Prix invalide';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _discountController,
-                        label: 'Réduction (%)',
-                        icon: Icons.percent,
-                        keyboardType: TextInputType.number,
-                        validator: (value) {
-                          if (value != null && value.trim().isNotEmpty) {
-                            final discount = double.tryParse(value);
-                            if (discount == null || discount < 0 || discount > 100) {
-                              return 'Réduction invalide';
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildTextField(
+                    controller: _titleController,
+                    label: 'Titre du produit',
+                    icon: Icons.title,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Le titre est requis';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _descriptionController,
+                    label: 'Description',
+                    icon: Icons.description,
+                    maxLines: 3,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'La description est requise';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _priceController,
+                          label: 'Prix (\$)',
+                          icon: Icons.attach_money,
+                          keyboardType: TextInputType.number,
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Le prix est requis';
                             }
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _stockController,
-                        label: 'Stock',
-                        icon: Icons.inventory_2,
-                        keyboardType: TextInputType.number,
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Le stock est requis';
-                          }
-                          if (int.tryParse(value) == null || int.parse(value) < 0) {
-                            return 'Stock invalide';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _ratingController,
-                        label: 'Note (0-5)',
-                        icon: Icons.star,
-                        keyboardType: TextInputType.number,
-                        validator: (value) {
-                          if (value != null && value.trim().isNotEmpty) {
-                            final rating = double.tryParse(value);
-                            if (rating == null || rating < 0 || rating > 5) {
-                              return 'Note invalide';
+                            if (double.tryParse(value) == null || double.parse(value) <= 0) {
+                              return 'Prix invalide';
                             }
-                          }
-                          return null;
-                        },
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _discountController,
+                          label: 'Réduction (%)',
+                          icon: Icons.percent,
+                          keyboardType: TextInputType.number,
+                          validator: (value) {
+                            if (value != null && value.trim().isNotEmpty) {
+                              final discount = double.tryParse(value);
+                              if (discount == null || discount < 0 || discount > 100) {
+                                return 'Réduction invalide';
+                              }
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _stockController,
+                          label: 'Stock',
+                          icon: Icons.inventory_2,
+                          keyboardType: TextInputType.number,
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Le stock est requis';
+                            }
+                            if (int.tryParse(value) == null || int.parse(value) < 0) {
+                              return 'Stock invalide';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _ratingController,
+                          label: 'Note (0-5)',
+                          icon: Icons.star,
+                          keyboardType: TextInputType.number,
+                          validator: (value) {
+                            if (value != null && value.trim().isNotEmpty) {
+                              final rating = double.tryParse(value);
+                              if (rating == null || rating < 0 || rating > 5) {
+                                return 'Note invalide';
+                              }
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _brandController,
+                    label: 'Marque',
+                    icon: Icons.branding_watermark,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _categoryController,
+                    label: 'Catégorie',
+                    icon: Icons.category,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'La catégorie est requise';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _imageUrlController,
+                    label: 'URL de l\'image',
+                    icon: Icons.image,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'L\'URL de l\'image est requise';
+                      }
+                      // Basic URL validation
+                      if (!value.startsWith('http')) {
+                        return 'URL invalide (doit commencer par http)';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 32),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _addProduct,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  controller: _brandController,
-                  label: 'Marque',
-                  icon: Icons.branding_watermark,
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  controller: _categoryController,
-                  label: 'Catégorie',
-                  icon: Icons.category,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'La catégorie est requise';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  controller: _imageUrlController,
-                  label: 'URL de l\'image',
-                  icon: Icons.image,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'L\'URL de l\'image est requise';
-                    }
-                    final uri = Uri.tryParse(value);
-                    if (uri == null || !uri.hasScheme) {
-                      return 'URL invalide';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _addProduct,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                    child: _isLoading
+                        ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                        : const Text(
+                      'Ajouter le produit',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : const Text(
-                          'Ajouter le produit',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
           ),
         ),
       ),

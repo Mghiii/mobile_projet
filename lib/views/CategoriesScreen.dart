@@ -69,17 +69,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   Future<void> _loadCategories() async {
-    if (MongoDatabase.productCollection == null) {
-      setState(() {
-        _isLoading = false;
-      });
-      return;
-    }
-
     try {
-      final products = await MongoDatabase.productCollection!
-          .find()
-          .toList() as List<Map<String, dynamic>>;
+      final snapshot = await MongoDatabase.db
+          .collection(MongoDatabase.productCollectionName)
+          .get();
+      final products = snapshot.docs.map((doc) => doc.data()).toList();
 
       // Extraire les catégories uniques et compter les produits
       final categoriesSet = <String>{};
@@ -101,6 +95,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      print("Error loading categories: $e");
       setState(() {
         _isLoading = false;
       });

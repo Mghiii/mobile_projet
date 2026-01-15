@@ -20,7 +20,7 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
   }
 
   Future<void> _deleteProduct(Map<String, dynamic> product) async {
-    if (MongoDatabase.productCollection == null) {
+    if (!MongoDatabase.isConnected) {
       return;
     }
 
@@ -47,7 +47,7 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
           const SnackBar(
             content: Text('Erreur lors de la suppression'),
             backgroundColor: Colors.red,
-            duration: Duration(seconds: 2),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -85,7 +85,7 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
   }
 
   Future<void> _loadProducts() async {
-    if (MongoDatabase.productCollection == null || MongoDatabase.currentUser == null) {
+    if (!MongoDatabase.isConnected || MongoDatabase.currentUser == null) {
       setState(() {
         _isLoading = false;
       });
@@ -100,7 +100,6 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
       return;
     }
 
-    // Récupérer le nom du vendeur
     final firstName = MongoDatabase.currentUser!['firstName']?.toString() ?? '';
     final lastName = MongoDatabase.currentUser!['lastName']?.toString() ?? '';
     _vendeurName = '$firstName $lastName'.trim();
@@ -108,17 +107,15 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
       _vendeurName = MongoDatabase.currentUser!['username']?.toString() ?? 'Vendeur';
     }
 
-    // Récupérer les produits du vendeur
     final products = await MongoDatabase.getProductsByVendeurEmail(vendeurEmail);
     
-    // Trier par date de création (les plus récents en premier)
     products.sort((a, b) {
-      final aDate = a['createdAt'] as String?;
-      final bDate = b['createdAt'] as String?;
+      final aDate = a['createdAt'];
+      final bDate = b['createdAt'];
       if (aDate == null && bDate == null) return 0;
       if (aDate == null) return 1;
       if (bDate == null) return -1;
-      return bDate.compareTo(aDate); // Décroissant
+      return (bDate as Comparable).compareTo(aDate);
     });
 
     setState(() {
@@ -133,7 +130,6 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // En-tête du drawer avec profil
           DrawerHeader(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -186,7 +182,6 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
               ],
             ),
           ),
-          // Section Profil
           ListTile(
             leading: const Icon(Icons.person, color: Colors.blueAccent),
             title: const Text('Mon Profil', style: TextStyle(color: Colors.white)),
@@ -195,7 +190,6 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
               Navigator.of(context).pushNamed('/vendeur-profile');
             },
           ),
-          // Section Paramètres
           ListTile(
             leading: const Icon(Icons.settings, color: Colors.blueAccent),
             title: const Text('Paramètres', style: TextStyle(color: Colors.white)),
@@ -205,7 +199,6 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
             },
           ),
           const Divider(color: Colors.grey),
-          // Liens rapides
           const Padding(
             padding: EdgeInsets.all(16.0),
             child: Text(
@@ -224,7 +217,7 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
               Navigator.pop(context);
               final result = await Navigator.of(context).pushNamed('/vendeur-add-product');
               if (result == true) {
-                _loadProducts(); // Recharger les produits après ajout
+                _loadProducts();
               }
             },
           ),
@@ -236,7 +229,6 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
             },
           ),
           const Divider(color: Colors.grey),
-          // Déconnexion
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
             title: const Text('Déconnexion', style: TextStyle(color: Colors.red)),
@@ -268,7 +260,7 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
             onPressed: () async {
               final result = await Navigator.of(context).pushNamed('/vendeur-add-product');
               if (result == true) {
-                _loadProducts(); // Recharger les produits après ajout
+                _loadProducts();
               }
             },
           ),
@@ -295,7 +287,7 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
                 ),
               )
-            : MongoDatabase.productCollection == null || MongoDatabase.currentUser == null
+            : !MongoDatabase.isConnected || MongoDatabase.currentUser == null
                 ? const Center(
                     child: Text(
                       'Base de données non connectée.\nLes produits ne peuvent pas être chargés.',
@@ -388,7 +380,6 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        // Image avec bouton supprimer
                                         Expanded(
                                           flex: 3,
                                           child: Stack(
@@ -451,14 +442,12 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
                                                         ),
                                                 ),
                                               ),
-                                              // Boutons d'action (modifier et supprimer)
                                               Positioned(
                                                 top: 10,
                                                 right: 10,
                                                 child: Row(
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
-                                                    // Bouton modifier
                                                     Container(
                                                       margin: const EdgeInsets.only(right: 8),
                                                       decoration: BoxDecoration(
@@ -480,7 +469,7 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
                                                             arguments: p,
                                                           );
                                                           if (result == true) {
-                                                            _loadProducts(); // Recharger les produits après modification
+                                                            _loadProducts();
                                                           }
                                                         },
                                                         padding: const EdgeInsets.all(8),
@@ -488,7 +477,6 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
                                                         tooltip: 'Modifier le produit',
                                                       ),
                                                     ),
-                                                    // Bouton supprimer
                                                     Container(
                                                       decoration: BoxDecoration(
                                                         color: Colors.red.shade600,
@@ -512,7 +500,6 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
                                                   ],
                                                 ),
                                               ),
-                                              // Badge de réduction
                                               if (p['discountPercentage'] != null)
                                                 Positioned(
                                                   top: 10,
@@ -548,7 +535,6 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
                                                     ),
                                                   ),
                                                 ),
-                                              // Rating badge
                                               if (rating['rate'] != null)
                                                 Positioned(
                                                   bottom: 10,
@@ -586,7 +572,6 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
                                             ],
                                           ),
                                         ),
-                                        // Informations du produit
                                         Expanded(
                                           flex: 2,
                                           child: Container(
@@ -595,7 +580,6 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                               children: [
-                                                // Titre et Marque
                                                 Column(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
@@ -633,7 +617,6 @@ class _VendeurDashboardState extends State<VendeurDashboard> {
                                                     ),
                                                   ],
                                                 ),
-                                                // Prix et Stock
                                                 Column(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [

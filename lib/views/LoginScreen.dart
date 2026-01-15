@@ -16,7 +16,7 @@ class _LoginscreenState extends State<Loginscreen> {
   bool _isLoading = false;
 
   Future<void> _login() async {
-    if (MongoDatabase.userCollection == null) {
+    if (!MongoDatabase.isConnected) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Erreur de base de données. Veuillez redémarrer l\'application.'),
@@ -41,17 +41,21 @@ class _LoginscreenState extends State<Loginscreen> {
     });
 
     try {
-      var user = await MongoDatabase.userCollection.findOne({
-        'email': _emailController.text.trim(),
-        'password': _pwdController.text, // Add password hashing for security
-      });
+      final snapshot = await MongoDatabase.db
+          .collection(MongoDatabase.userCollectionName)
+          .where('email', isEqualTo: _emailController.text.trim())
+          .where('password', isEqualTo: _pwdController.text)
+          .limit(1)
+          .get();
 
-      if (user != null) {
-        // Stocker l'utilisateur connecté
+      if (snapshot.docs.isNotEmpty) {
+        final userDoc = snapshot.docs.first;
+        final user = userDoc.data();
+        user['_id'] = userDoc.id; // Add document ID
+
         MongoDatabase.currentUser = user;
         String role = user['role'];
         
-        // Redirection based on role
         switch (role) {
           case 'client':
             Navigator.of(context).pushReplacementNamed('/client');
@@ -103,7 +107,6 @@ class _LoginscreenState extends State<Loginscreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const SizedBox(height: 40),
-              // Image avec gestion d'erreur
               Image.asset(
                 "images/login.png",
                 errorBuilder: (context, error, stackTrace) {
@@ -122,7 +125,7 @@ class _LoginscreenState extends State<Loginscreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _isLoading || MongoDatabase.userCollection == null ? null : _login,
+                  onPressed: _isLoading || !MongoDatabase.isConnected ? null : _login,
                   child: _isLoading
                       ? const SizedBox(
                           height: 20,
@@ -141,7 +144,7 @@ class _LoginscreenState extends State<Loginscreen> {
                         ),
                 ),
               ),
-              if (MongoDatabase.userCollection == null)
+              if (!MongoDatabase.isConnected)
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Text(
