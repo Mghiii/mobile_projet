@@ -31,8 +31,21 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: Colors.black,
+        //backgroundColor: Colors.black,
+        cardColor: Colors.grey.shade900,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+        colorScheme: ColorScheme.dark(
+          primary: Colors.blueAccent,
+          secondary: Colors.blueAccent,
+          surface: Colors.grey.shade900,
+          background: Colors.black,
+        ),
       ),
       debugShowCheckedModeBanner: false,
       initialRoute: '/',

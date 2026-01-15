@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:miniprojet/services/database.dart';
 
 class AdminDashboard extends StatelessWidget {
   const AdminDashboard({super.key});
@@ -9,16 +8,6 @@ class AdminDashboard extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: () {
-              MongoDatabase.logout();
-              Navigator.of(context).pushReplacementNamed('/login');
-            },
-          ),
-        ],
       ),
       body: const Center(
         child: Text('Welcome Admin!'),

@@ -10,8 +10,15 @@ class ClientDashboard extends StatefulWidget {
 
 class _ClientDashboardState extends State<ClientDashboard> {
   bool _isLoading = true;
-  List<Map<String, dynamic>> _products = [];
-
+  List<Map<String, dynamic>> _allProducts = [];
+  List<Map<String, dynamic>> _filteredProducts = [];
+  List<String> _categories = [];
+  String? _selectedCategory;
+  
+  // Pagination
+  final int _itemsPerPage = 12;
+  int _currentPage = 0;
+  
   @override
   void initState() {
     super.initState();
@@ -29,9 +36,51 @@ class _ClientDashboardState extends State<ClientDashboard> {
     final products =
         await MongoDatabase.productCollection.find().toList() as List<Map<String, dynamic>>;
 
+    // Extraire les catégories uniques
+    final categoriesSet = <String>{};
+    for (var product in products) {
+      final category = product['category']?.toString();
+      if (category != null && category.isNotEmpty) {
+        categoriesSet.add(category);
+      }
+    }
+    final categories = categoriesSet.toList()..sort();
+
     setState(() {
-      _products = products;
+      _allProducts = products;
+      _categories = categories;
+      _filteredProducts = products;
+      _selectedCategory = null;
+      _currentPage = 0;
       _isLoading = false;
+    });
+  }
+
+  void _filterByCategory(String? category) {
+    setState(() {
+      _selectedCategory = category;
+      if (category == null) {
+        _filteredProducts = _allProducts;
+      } else {
+        _filteredProducts = _allProducts
+            .where((p) => p['category']?.toString() == category)
+            .toList();
+      }
+      _currentPage = 0; // Reset à la première page
+    });
+  }
+
+  List<Map<String, dynamic>> get _paginatedProducts {
+    final startIndex = _currentPage * _itemsPerPage;
+    final endIndex = (startIndex + _itemsPerPage).clamp(0, _filteredProducts.length);
+    return _filteredProducts.sublist(startIndex, endIndex);
+  }
+
+  int get _totalPages => (_filteredProducts.length / _itemsPerPage).ceil();
+
+  void _goToPage(int page) {
+    setState(() {
+      _currentPage = page.clamp(0, _totalPages - 1);
     });
   }
 
@@ -39,7 +88,7 @@ class _ClientDashboardState extends State<ClientDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Client Dashboard'),
+        title: const Text('Boutique'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -50,81 +99,555 @@ class _ClientDashboardState extends State<ClientDashboard> {
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
             onPressed: () {
+              MongoDatabase.logout();
               Navigator.of(context).pushReplacementNamed('/login');
             },
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : MongoDatabase.productCollection == null
-              ? const Center(
-                  child: Text(
-                    'Base de données non connectée.\nLes produits ne peuvent pas être chargés.',
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              : _products.isEmpty
-                  ? const Center(
-                      child: Text('Aucun produit disponible.'),
-                    )
-                  : ListView.builder(
-                      itemCount: _products.length,
-                      itemBuilder: (context, index) {
-                        final p = _products[index];
-                        final rating = (p['rating'] as Map<String, dynamic>?) ?? {};
-
-                        return Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: ListTile(
-                            leading: p['image'] != null
-                                ? Image.network(
-                                    p['image'],
-                                    width: 50,
-                                    height: 50,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) =>
-                                        const Icon(Icons.image_not_supported),
-                                  )
-                                : const Icon(Icons.shopping_bag),
-                            title: Text(p['title'] ?? ''),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: 4),
-                                Text(
-                                  p['description'] ?? '',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+      body: Container(
+        color: Colors.black,
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
+                ),
+              )
+            : MongoDatabase.productCollection == null
+                ? const Center(
+                    child: Text(
+                      'Base de données non connectée.\nLes produits ne peuvent pas être chargés.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  )
+                : _allProducts.isEmpty
+                    ? RefreshIndicator(
+                        onRefresh: _loadProducts,
+                        color: Colors.blueAccent,
+                        child: const SingleChildScrollView(
+                          physics: AlwaysScrollableScrollPhysics(),
+                          child: SizedBox(
+                            height: 400,
+                            child: Center(
+                              child: Text(
+                                'Aucun produit disponible.\nTirez vers le bas pour rafraîchir.',
+                                style: TextStyle(color: Colors.white),
+      ),
+                            ),
+                          ),
+                        ),
+                      )
+                    : Column(
+                      children: [
+                        // Panneau de catégories
+                        Container(
+                          height: 60,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          color: Colors.black,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            children: [
+                              // Bouton "Tous"
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: FilterChip(
+                                  label: const Text('Tous', style: TextStyle(color: Colors.white)),
+                                  selected: _selectedCategory == null,
+                                  selectedColor: Colors.blueAccent,
+                                  checkmarkColor: Colors.white,
+                                  backgroundColor: Colors.grey.shade800,
+                                  onSelected: (_) => _filterByCategory(null),
+                                  avatar: _selectedCategory == null
+                                      ? const Icon(Icons.check, size: 18, color: Colors.white)
+                                      : null,
                                 ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Text(
-                                      '${p['price'] ?? '-'} \$',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
-                                      ),
+                              ),
+                              // Catégories
+                              ..._categories.map((category) => Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: FilterChip(
+                                      label: Text(category, style: const TextStyle(color: Colors.white)),
+                                      selected: _selectedCategory == category,
+                                      selectedColor: Colors.blueAccent,
+                                      checkmarkColor: Colors.white,
+                                      backgroundColor: Colors.grey.shade800,
+                                      onSelected: (_) => _filterByCategory(category),
+                                      avatar: _selectedCategory == category
+                                          ? const Icon(Icons.check, size: 18, color: Colors.white)
+                                          : null,
                                     ),
-                                    const SizedBox(width: 12),
-                                    if (rating['rate'] != null)
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.star,
-                                              size: 16, color: Colors.amber),
-                                          const SizedBox(width: 4),
-                                          Text('${rating['rate']} (${rating['count'] ?? 0})'),
-                                        ],
+                                  )),
+                            ],
+                          ),
+                        ),
+                        // Compteur de résultats
+                        Container(
+                          color: Colors.black,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Row(
+                            children: [
+                              Text(
+                                '${_filteredProducts.length} produit(s)',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade300,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              if (_selectedCategory != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: Chip(
+                                    backgroundColor: Colors.grey.shade800,
+                                    label: Text(
+                                      'Catégorie: $_selectedCategory',
+                                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                                    ),
+                                    onDeleted: () => _filterByCategory(null),
+                                    deleteIcon: const Icon(Icons.close, size: 18, color: Colors.white),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        // Grille de produits (cartes)
+                        Expanded(
+                          child: Container(
+                            color: Colors.black,
+                            child: RefreshIndicator(
+                              onRefresh: _loadProducts,
+                              color: Colors.blueAccent,
+                              child: GridView.builder(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.all(8),
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                childAspectRatio: 0.62,
+                                crossAxisSpacing: 10,
+                                mainAxisSpacing: 10,
+                              ),
+                              itemCount: _paginatedProducts.length,
+                              itemBuilder: (context, index) {
+                                final p = _paginatedProducts[index];
+                                final rating = (p['rating'] as Map<String, dynamic>?) ?? {};
+                                final finalPrice = p['discountPercentage'] != null && p['price'] != null
+                                    ? ((p['price'] as num) * (1 - (p['discountPercentage'] as num) / 100))
+                                    : p['price'];
+
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Colors.grey.shade900,
+                                        Colors.grey.shade800,
+                                      ],
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 4),
                                       ),
-                                  ],
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Image avec overlay moderne
+                                      Expanded(
+                                        flex: 3,
+                                        child: Stack(
+                                          children: [
+                                            Container(
+                                              width: double.infinity,
+                                              decoration: BoxDecoration(
+                                                borderRadius: const BorderRadius.vertical(
+                                                  top: Radius.circular(16),
+                                                ),
+                                                gradient: LinearGradient(
+                                                  begin: Alignment.topCenter,
+                                                  end: Alignment.bottomCenter,
+                                                  colors: [
+                                                    Colors.grey.shade800,
+                                                    Colors.grey.shade900,
+                                                  ],
+                                                ),
+                                              ),
+                                              child: ClipRRect(
+                                                borderRadius: const BorderRadius.vertical(
+                                                  top: Radius.circular(16),
+                                                ),
+                                                child: p['image'] != null
+                                                    ? Image.network(
+                                                        p['image'],
+                                                        width: double.infinity,
+                                                        fit: BoxFit.cover,
+                                                        loadingBuilder: (context, child, loadingProgress) {
+                                                          if (loadingProgress == null) return child;
+                                                          return Container(
+                                                            color: Colors.grey.shade800,
+                                                            child: Center(
+                                                              child: CircularProgressIndicator(
+                                                                value: loadingProgress.expectedTotalBytes != null
+                                                                    ? loadingProgress.cumulativeBytesLoaded /
+                                                                        loadingProgress.expectedTotalBytes!
+                                                                    : null,
+                                                                strokeWidth: 2,
+                                                                valueColor: AlwaysStoppedAnimation<Color>(
+                                                                  Colors.blueAccent,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
+                                                        errorBuilder: (_, __, ___) => Container(
+                                                          color: Colors.grey.shade800,
+                                                          child: const Icon(
+                                                            Icons.image_not_supported,
+                                                            size: 40,
+                                                            color: Colors.grey,
+                                                          ),
+                                                        ),
+                                                      )
+                                                    : const Icon(
+                                                        Icons.shopping_bag,
+                                                        size: 40,
+                                                        color: Colors.grey,
+                                                      ),
+                                              ),
+                                            ),
+                                            // Overlay gradient en bas de l'image
+                                            Positioned(
+                                              bottom: 0,
+                                              left: 0,
+                                              right: 0,
+                                              child: Container(
+                                                height: 40,
+                                                decoration: BoxDecoration(
+                                                  gradient: LinearGradient(
+                                                    begin: Alignment.topCenter,
+                                                    end: Alignment.bottomCenter,
+                                                    colors: [
+                                                      Colors.transparent,
+                                                      Colors.black.withValues(alpha: 0.7),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            // Badge de réduction moderne
+                                            if (p['discountPercentage'] != null)
+                                              Positioned(
+                                                top: 10,
+                                                right: 10,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 8, vertical: 5),
+                                                  decoration: BoxDecoration(
+                                                    gradient: LinearGradient(
+                                                      colors: [
+                                                        Colors.red.shade600,
+                                                        Colors.red.shade700,
+                                                      ],
+                                                    ),
+                                                    borderRadius: BorderRadius.circular(20),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: Colors.red.withValues(alpha: 0.5),
+                                                        blurRadius: 4,
+                                                        offset: const Offset(0, 2),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  child: Text(
+                                                    '-${p['discountPercentage']}%',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            // Rating badge en haut à gauche
+                                            if (rating['rate'] != null)
+                                              Positioned(
+                                                top: 10,
+                                                left: 10,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 6, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black.withValues(alpha: 0.6),
+                                                    borderRadius: BorderRadius.circular(12),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(
+                                                        Icons.star,
+                                                        size: 12,
+                                                        color: Colors.amber,
+                                                      ),
+                                                      const SizedBox(width: 2),
+                                                      Text(
+                                                        '${rating['rate']}',
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      // Contenu de la carte avec style moderne
+                                      Expanded(
+                                        flex: 2,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(10),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              // Titre et Marque
+                                              Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  if (p['brand'] != null)
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(
+                                                          horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.blueAccent.withValues(alpha: 0.2),
+                                                        borderRadius: BorderRadius.circular(4),
+                                                      ),
+                                                      child: Text(
+                                                        p['brand']!.toUpperCase(),
+                                                        style: TextStyle(
+                                                          fontSize: 8,
+                                                          color: Colors.blue.shade300,
+                                                          fontWeight: FontWeight.bold,
+                                                          letterSpacing: 0.5,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  if (p['brand'] != null) const SizedBox(height: 4),
+                                                  Text(
+                                                    p['title'] ?? '',
+                                                    maxLines: 2,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Colors.white,
+                                                      height: 1.2,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              // Prix et Stock
+                                              Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                                    children: [
+                                                      Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          if (p['discountPercentage'] != null)
+                                                            Text(
+                                                              '${p['price']} \$',
+                                                              style: TextStyle(
+                                                                fontSize: 9,
+                                                                color: Colors.grey.shade500,
+                                                                decoration: TextDecoration.lineThrough,
+                                                              ),
+                                                            ),
+                                                          Text(
+                                                            '${finalPrice?.toStringAsFixed(2) ?? '-'} \$',
+                                                            style: TextStyle(
+                                                              fontSize: 16,
+                                                              fontWeight: FontWeight.bold,
+                                                              color: Colors.green.shade400,
+                                                              shadows: [
+                                                                Shadow(
+                                                                  color: Colors.green.withValues(alpha: 0.3),
+                                                                  blurRadius: 4,
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      if (p['stock'] != null)
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(
+                                                              horizontal: 6, vertical: 3),
+                                                          decoration: BoxDecoration(
+                                                            color: (p['stock'] as int) > 0
+                                                                ? Colors.green.withValues(alpha: 0.2)
+                                                                : Colors.red.withValues(alpha: 0.2),
+                                                            borderRadius: BorderRadius.circular(8),
+                                                            border: Border.all(
+                                                              color: (p['stock'] as int) > 0
+                                                                  ? Colors.green
+                                                                  : Colors.red,
+                                                              width: 1,
+                                                            ),
+                                                          ),
+                                                          child: Row(
+                                                            mainAxisSize: MainAxisSize.min,
+                                                            children: [
+                                                              Icon(
+                                                                Icons.check_circle,
+                                                                size: 10,
+                                                                color: (p['stock'] as int) > 0
+                                                                    ? Colors.green
+                                                                    : Colors.red,
+                                                              ),
+                                                              const SizedBox(width: 3),
+                                                              Text(
+                                                                '${p['stock']}',
+                                                                style: TextStyle(
+                                                                  fontSize: 9,
+                                                                  fontWeight: FontWeight.bold,
+                                                                  color: (p['stock'] as int) > 0
+                                                                      ? Colors.green
+                                                                      : Colors.red,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Pagination simplifiée
+                        if (_totalPages > 1)
+                          Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.grey.shade900,
+                                  blurRadius: 4,
+                                  offset: const Offset(0, -2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                // Bouton précédent
+                                IconButton(
+                                  icon: const Icon(Icons.chevron_left, color: Colors.white),
+                                  onPressed: _currentPage > 0
+                                      ? () => _goToPage(_currentPage - 1)
+                                      : null,
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.grey.shade800,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Afficher seulement les 3 premières pages (1, 2, 3)
+                                // ou les pages autour de la page actuelle si on est plus loin
+                                ...List.generate(
+                                  _totalPages < 3 ? _totalPages : 3,
+                                  (i) {
+                                    int pageIndex;
+                                    if (_currentPage < 2) {
+                                      // Si on est sur les premières pages, afficher 1, 2, 3
+                                      pageIndex = i;
+                                    } else if (_currentPage >= _totalPages - 2) {
+                                      // Si on est sur les dernières pages, afficher les 3 dernières
+                                      pageIndex = _totalPages - 3 + i;
+                                    } else {
+                                      // Sinon, afficher la page actuelle et les 2 autour
+                                      pageIndex = _currentPage - 1 + i;
+                                    }
+                                    
+                                    // S'assurer qu'on ne dépasse pas les limites
+                                    pageIndex = pageIndex.clamp(0, _totalPages - 1);
+                                    
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                                      child: TextButton(
+                                        onPressed: () => _goToPage(pageIndex),
+                                        style: TextButton.styleFrom(
+                                          backgroundColor: _currentPage == pageIndex
+                                              ? Colors.blueAccent
+                                              : Colors.grey.shade800,
+                                          minimumSize: const Size(40, 40),
+                                          padding: EdgeInsets.zero,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '${pageIndex + 1}',
+                                          style: TextStyle(
+                                            color: _currentPage == pageIndex
+                                                ? Colors.white
+                                                : Colors.white70,
+                                            fontSize: 14,
+                                            fontWeight: _currentPage == pageIndex
+                                                ? FontWeight.bold
+                                                : FontWeight.normal,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                // Bouton suivant
+                                IconButton(
+                                  icon: const Icon(Icons.chevron_right, color: Colors.white),
+                                  onPressed: _currentPage < _totalPages - 1
+                                      ? () => _goToPage(_currentPage + 1)
+                                      : null,
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.grey.shade800,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                        );
-                      },
+                      ],
                     ),
+      ),
     );
   }
 }

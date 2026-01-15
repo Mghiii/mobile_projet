@@ -47,6 +47,8 @@ class _LoginscreenState extends State<Loginscreen> {
       });
 
       if (user != null) {
+        // Stocker l'utilisateur connecté
+        MongoDatabase.currentUser = user;
         String role = user['role'];
         
         // Redirection based on role
