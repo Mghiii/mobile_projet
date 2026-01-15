@@ -1,8 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:miniprojet/services/database.dart';
+import 'package:miniprojet/views/AdminDashboard.dart';
+import 'package:miniprojet/views/ClientDashboard.dart';
 import 'package:miniprojet/views/LoginScreen.dart';
 import 'package:miniprojet/views/SingUpScreen.dart';
+import 'package:miniprojet/views/VendeurDashboard.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Tenter de se connecter à MongoDB (ne bloque pas l'application si échec)
+  try {
+    await MongoDatabase.connect();
+    await MongoDatabase.createDefaultUsers(); // Crée les 3 utilisateurs (admin, client, vendeur)
+    await MongoDatabase.syncProductsFromFakeStore(); // Importe les produits FakeStoreAPI dans la collection products
+    print("✓ Application prête avec MongoDB connecté");
+  } catch (e) {
+    MongoDatabase.isConnected = false;
+    print("⚠️ Erreur de connexion MongoDB: $e");
+    print("⚠️ L'application démarre quand même, mais les fonctionnalités de base de données ne seront pas disponibles.");
+    print("⚠️ Vous pouvez insérer les utilisateurs manuellement via MongoDB Compass (voir GUIDE_MONGODB.md)");
+  }
+  
   runApp(const MyApp());
 }
 
@@ -12,9 +31,19 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent,)),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
+      ),
       debugShowCheckedModeBanner: false,
-      home: Singupscreen(),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const Loginscreen(),
+        '/login': (context) => const Loginscreen(),
+        '/signup': (context) => const Singupscreen(),
+        '/admin': (context) => const AdminDashboard(),
+        '/client': (context) => const ClientDashboard(),
+        '/vendeur': (context) => const VendeurDashboard(),
+      },
     );
   }
 }
