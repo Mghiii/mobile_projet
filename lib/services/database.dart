@@ -9,12 +9,17 @@ import 'package:http/http.dart' as http;
 class MongoDatabase {
   // We keep the name "MongoDatabase" to avoid breaking the rest of your app,
   // but internally it is now using Firestore.
-  static final FirebaseFirestore db = FirebaseFirestore.instance;
+  static FirebaseFirestore? _db;
+  static FirebaseFirestore get db {
+    _db ??= FirebaseFirestore.instance;
+    return _db!;
+  }
   static Map<String, dynamic>? currentUser;
   static bool isConnected = false;
 
   static const String userCollectionName = 'users';
   static const String productCollectionName = 'products';
+  static const String categoryCollectionName = 'categories';
 
   /// Initialize Firebase (Connection is automatic)
   static Future<void> connect() async {
@@ -25,8 +30,16 @@ class MongoDatabase {
         await Firebase.initializeApp();
       }
 
+      // Initialiser la connexion Firestore
+      // Note: Si votre projet Firebase s'appelle "flutter", le fichier de configuration
+      // (google-services.json ou GoogleService-Info.plist) pointe déjà vers le bon projet.
+      // Pour utiliser une base de données nommée "flutter", vous devez d'abord la créer
+      // dans Firebase Console, puis utiliser: FirebaseFirestore.instanceFor(app: Firebase.app(), database: 'flutter')
+      _db = FirebaseFirestore.instance;
       isConnected = true;
       print("✓ Firestore initialized successfully!");
+      print("✓ Connexion à Firebase établie");
+      print("ℹ️ Le projet Firebase est configuré via google-services.json / GoogleService-Info.plist");
 
       // Optional: Check connection by fetching a count (costs 1 read)
       try {
@@ -326,5 +339,257 @@ class MongoDatabase {
     currentUser = null;
     // Firebase has its own auth, you can also call:
     // FirebaseAuth.instance.signOut();
+  }
+
+  // ========== ADMIN METHODS ==========
+
+  /// Get all users
+  static Future<List<Map<String, dynamic>>> getAllUsers() async {
+    try {
+      final snapshot = await db.collection(userCollectionName).get();
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['_id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      print("✗ Error getting users: $e");
+      return [];
+    }
+  }
+
+  /// Create a new user
+  static Future<bool> createUser(Map<String, dynamic> userData) async {
+    try {
+      // Check if email already exists
+      final existing = await db.collection(userCollectionName)
+          .where('email', isEqualTo: userData['email'])
+          .limit(1)
+          .get();
+      
+      if (existing.docs.isNotEmpty) {
+        return false; // Email already exists
+      }
+
+      await db.collection(userCollectionName).add(userData);
+      return true;
+    } catch (e) {
+      print("✗ Error creating user: $e");
+      return false;
+    }
+  }
+
+  /// Update user
+  static Future<bool> updateUser(String userId, Map<String, dynamic> updates) async {
+    try {
+      await db.collection(userCollectionName).doc(userId).update(updates);
+      return true;
+    } catch (e) {
+      print("✗ Error updating user: $e");
+      return false;
+    }
+  }
+
+  /// Delete user
+  static Future<bool> deleteUser(String userId) async {
+    try {
+      await db.collection(userCollectionName).doc(userId).delete();
+      return true;
+    } catch (e) {
+      print("✗ Error deleting user: $e");
+      return false;
+    }
+  }
+
+  /// Get all categories
+  static Future<List<Map<String, dynamic>>> getAllCategories() async {
+    try {
+      final snapshot = await db.collection(categoryCollectionName)
+          .orderBy('name')
+          .get();
+      final categories = snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['_id'] = doc.id;
+        return data;
+      }).toList();
+      print("✓ ${categories.length} catégories trouvées dans la collection 'categories'");
+      return categories;
+    } catch (e) {
+      // Si la collection n'existe pas ou est vide, ce n'est pas une erreur
+      if (e.toString().contains('index') || e.toString().contains('orderBy')) {
+        // Essayer sans orderBy si l'index n'existe pas
+        try {
+          final snapshot = await db.collection(categoryCollectionName).get();
+          final categories = snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['_id'] = doc.id;
+            return data;
+          }).toList();
+          print("✓ ${categories.length} catégories trouvées (sans orderBy)");
+          return categories;
+        } catch (e2) {
+          print("ℹ️ Collection 'categories' vide ou inexistante: $e2");
+          return [];
+        }
+      }
+      print("ℹ️ Collection 'categories' vide ou inexistante: $e");
+      return [];
+    }
+  }
+
+  /// Create category
+  static Future<bool> createCategory(Map<String, dynamic> categoryData) async {
+    try {
+      // Check if category name already exists
+      final existing = await db.collection(categoryCollectionName)
+          .where('name', isEqualTo: categoryData['name'])
+          .limit(1)
+          .get();
+      
+      if (existing.docs.isNotEmpty) {
+        return false; // Category already exists
+      }
+
+      categoryData['createdAt'] = FieldValue.serverTimestamp();
+      await db.collection(categoryCollectionName).add(categoryData);
+      return true;
+    } catch (e) {
+      print("✗ Error creating category: $e");
+      return false;
+    }
+  }
+
+  /// Update category
+  static Future<bool> updateCategory(String categoryId, Map<String, dynamic> updates) async {
+    try {
+      updates['updatedAt'] = FieldValue.serverTimestamp();
+      await db.collection(categoryCollectionName).doc(categoryId).update(updates);
+      return true;
+    } catch (e) {
+      print("✗ Error updating category: $e");
+      return false;
+    }
+  }
+
+  /// Delete category
+  static Future<bool> deleteCategory(String categoryId) async {
+    try {
+      await db.collection(categoryCollectionName).doc(categoryId).delete();
+      return true;
+    } catch (e) {
+      print("✗ Error deleting category: $e");
+      return false;
+    }
+  }
+
+  /// Get all products (admin view)
+  static Future<List<Map<String, dynamic>>> getAllProducts() async {
+    try {
+      print("🔄 Début du chargement des produits depuis Firebase...");
+      
+      // Charger tous les produits sans orderBy pour éviter les problèmes d'index
+      final snapshot = await db.collection(productCollectionName).get();
+      
+      print("📊 ${snapshot.docs.length} documents trouvés dans la collection 'products'");
+      
+      final products = snapshot.docs.map((doc) {
+        final data = doc.data();
+        // Utiliser l'ID du document Firestore comme _id
+        data['_id'] = doc.id;
+        
+        // Si mongoId existe, on peut le garder aussi
+        if (data['mongoId'] == null) {
+          data['mongoId'] = doc.id;
+        }
+        
+        // S'assurer que tous les champs nécessaires existent
+        if (data['category'] == null) {
+          data['category'] = '';
+        }
+        if (data['title'] == null) {
+          data['title'] = '';
+        }
+        if (data['price'] == null) {
+          data['price'] = 0.0;
+        }
+        
+        return data;
+      }).toList();
+      
+      // Trier manuellement par createdAt si disponible, sinon par _id
+      products.sort((a, b) {
+        final aDate = a['createdAt'];
+        final bDate = b['createdAt'];
+        if (aDate != null && bDate != null) {
+          try {
+            return (bDate as Comparable).compareTo(aDate);
+          } catch (e) {
+            // Si la comparaison échoue, trier par ID
+            return (b['_id'] as String).compareTo(a['_id'] as String);
+          }
+        }
+        // Trier par ID si pas de date
+        return (b['_id'] as String).compareTo(a['_id'] as String);
+      });
+      
+      print("✓ ${products.length} produits chargés et traités depuis Firebase");
+      
+      if (products.isNotEmpty) {
+        print("📦 Exemple de produit chargé: ${products.first['title']} (catégorie: ${products.first['category']})");
+      }
+      
+      return products;
+    } catch (e, stackTrace) {
+      print("✗ Erreur lors du chargement des produits: $e");
+      print("Stack trace: $stackTrace");
+      return [];
+    }
+  }
+
+  /// Create product (admin)
+  static Future<bool> createProduct(Map<String, dynamic> productData) async {
+    try {
+      productData['createdAt'] = FieldValue.serverTimestamp();
+      await db.collection(productCollectionName).add(productData);
+      return true;
+    } catch (e) {
+      print("✗ Error creating product: $e");
+      return false;
+    }
+  }
+
+  /// Get statistics for admin dashboard
+  static Future<Map<String, int>> getAdminStatistics() async {
+    try {
+      final usersSnapshot = await db.collection(userCollectionName).count().get();
+      final productsSnapshot = await db.collection(productCollectionName).count().get();
+      final categoriesSnapshot = await db.collection(categoryCollectionName).count().get();
+      
+      final clientsSnapshot = await db.collection(userCollectionName)
+          .where('role', isEqualTo: 'client')
+          .count()
+          .get();
+      final vendeursSnapshot = await db.collection(userCollectionName)
+          .where('role', isEqualTo: 'vendeur')
+          .count()
+          .get();
+
+      return {
+        'totalUsers': usersSnapshot.count ?? 0,
+        'totalProducts': productsSnapshot.count ?? 0,
+        'totalCategories': categoriesSnapshot.count ?? 0,
+        'totalClients': clientsSnapshot.count ?? 0,
+        'totalVendeurs': vendeursSnapshot.count ?? 0,
+      };
+    } catch (e) {
+      print("✗ Error getting statistics: $e");
+      return {
+        'totalUsers': 0,
+        'totalProducts': 0,
+        'totalCategories': 0,
+        'totalClients': 0,
+        'totalVendeurs': 0,
+      };
+    }
   }
 }

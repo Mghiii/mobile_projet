@@ -354,6 +354,8 @@ class _ClientDashboardState extends State<ClientDashboard> {
       drawer: _buildDrawer(context, currentUser),
       appBar: AppBar(
         title: const Text('Boutique'),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
         actions: [
           ValueListenableBuilder<List<Map<String, dynamic>>>(
             valueListenable: _cartService.cart,

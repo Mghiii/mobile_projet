@@ -6,12 +6,14 @@ import 'package:miniprojet/views/LoginScreen.dart';
 import 'package:miniprojet/views/ShoppingCartScreen.dart';
 import 'package:miniprojet/views/SingUpScreen.dart';
 import 'package:miniprojet/views/VendeurDashboard.dart';
-import 'package:miniprojet/views/admin_dashboard.dart';
 import 'package:miniprojet/views/client_dashboard.dart';
 import 'package:miniprojet/views/VendeurAddProductScreen.dart';
 import 'package:miniprojet/views/VendeurEditProductScreen.dart';
 import 'package:miniprojet/views/VendeurProfileScreen.dart';
 import 'package:miniprojet/views/VendeurSettingsScreen.dart';
+import 'package:miniprojet/views/AdminDashboard.dart';
+import 'package:miniprojet/views/AdminProfileScreen.dart';
+import 'package:miniprojet/views/AdminSettingsScreen.dart';
 //import 'package:miniprojet/views/login_screen.dart';
 //import 'package:miniprojet/views/shopping_cart_screen.dart';
 //import 'package:miniprojet/views/signup_screen.dart';
@@ -55,6 +57,8 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const Loginscreen(),
         '/signup': (context) => const Singupscreen(),
         '/admin': (context) => const AdminDashboard(),
+        '/admin-profile': (context) => const AdminProfileScreen(),
+        '/admin-settings': (context) => const AdminSettingsScreen(),
         '/client': (context) => const ClientDashboard(),
         '/cart': (context) => const ShoppingCartScreen(),
         // Routes de l'espace vendeur
