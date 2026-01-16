@@ -26,7 +26,6 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Section Compte
             _buildSectionTitle('Compte'),
             const SizedBox(height: 8),
             _buildSettingsCard(

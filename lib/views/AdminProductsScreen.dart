@@ -37,7 +37,6 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
       final users = await MongoDatabase.getAllUsers();
       final vendeurs = users.where((u) => u['role'] == 'vendeur').toList();
 
-      // Extract unique categories from products
       final categoriesSet = <String>{};
       for (var product in products) {
         final category = product['category']?.toString();
@@ -682,7 +681,6 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           color: Colors.black,
           child: Column(
             children: [
-              // Search and filter bar
               Container(
                 padding: const EdgeInsets.all(16),
                 color: Colors.black,
@@ -789,7 +787,6 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   ],
                 ),
               ),
-              // Products list
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())

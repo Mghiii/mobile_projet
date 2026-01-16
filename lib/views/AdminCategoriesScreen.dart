@@ -27,10 +27,8 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
     });
 
     try {
-      // D'abord, charger depuis la collection categories
       var categories = await MongoDatabase.getAllCategories();
       
-      // Si aucune catégorie dans la collection, extraire depuis les produits
       if (categories.isEmpty) {
         if (kDebugMode) {
           print("ℹ️ Aucune catégorie dans la collection, extraction depuis les produits...");
@@ -45,7 +43,6 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
           }
         }
         
-        // Créer des objets catégorie à partir des noms
         categories = categoriesSet.map((name) => {
           'name': name,
           'description': 'Catégorie extraite des produits',
@@ -279,7 +276,6 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
     );
   }
 
-  // Obtenir les couleurs pour une catégorie
   List<Color> _getCategoryColors(String categoryName) {
     final colorsList = [
       [Color(0xFF667EEA), Color(0xFF764BA2)], // Violet
@@ -304,13 +300,11 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
       [Color(0xFFFFD700), Color(0xFFFFA500)], // Or-orange
     ];
     
-    // Utiliser le hash du nom pour obtenir une couleur cohérente
     final hash = categoryName.hashCode;
     final index = hash.abs() % colorsList.length;
     return colorsList[index];
   }
 
-  // Obtenir l'icône pour une catégorie
   IconData _getCategoryIcon(String categoryName) {
     final name = categoryName.toLowerCase();
     
@@ -390,7 +384,6 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
           color: Colors.black,
           child: Column(
             children: [
-              // Search bar
               Container(
                 padding: const EdgeInsets.all(16),
                 color: Colors.black,
@@ -405,28 +398,28 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                     ),
                     const SizedBox(height: 8),
                     TextField(
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Rechercher une catégorie...',
-                    hintStyle: TextStyle(color: Colors.grey.shade500),
-                    prefixIcon: const Icon(Icons.search, color: Colors.blueAccent),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, color: Colors.grey),
-                            onPressed: () {
-                              setState(() {
-                                _searchQuery = '';
-                              });
-                            },
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: Colors.grey.shade900,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Rechercher une catégorie...',
+                        hintStyle: TextStyle(color: Colors.grey.shade500),
+                        prefixIcon: const Icon(Icons.search, color: Colors.blueAccent),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, color: Colors.grey),
+                                onPressed: () {
+                                  setState(() {
+                                    _searchQuery = '';
+                                  });
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: Colors.grey.shade900,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
                       onChanged: (value) {
                         setState(() {
                           _searchQuery = value;
@@ -436,7 +429,6 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                   ],
                 ),
               ),
-              // Categories list
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
@@ -495,14 +487,12 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                                     ),
                                     child: Stack(
                                       children: [
-                                        // Contenu principal
                                         Padding(
                                           padding: const EdgeInsets.all(16),
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                             children: [
-                                              // Icône
                                               Container(
                                                 padding: const EdgeInsets.all(12),
                                                 decoration: BoxDecoration(
@@ -516,7 +506,6 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                                                 ),
                                               ),
                                               const Spacer(),
-                                              // Nom de la catégorie
                                               Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [

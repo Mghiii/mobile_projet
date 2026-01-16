@@ -1,14 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:http/http.dart' as http;
 
 class MongoDatabase {
-  // We keep the name "MongoDatabase" to avoid breaking the rest of your app,
-  // but internally it is now using Firestore.
   static FirebaseFirestore? _db;
   static FirebaseFirestore get db {
     _db ??= FirebaseFirestore.instance;
@@ -21,27 +17,16 @@ class MongoDatabase {
   static const String productCollectionName = 'products';
   static const String categoryCollectionName = 'categories';
 
-  /// Initialize Firebase (Connection is automatic)
   static Future<void> connect() async {
     try {
-      // In Firebase, "connecting" is instantaneous as it's just getting the instance.
-      // We check if the app is initialized to be safe.
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
       }
 
-      // Initialiser la connexion Firestore
-      // Note: Si votre projet Firebase s'appelle "flutter", le fichier de configuration
-      // (google-services.json ou GoogleService-Info.plist) pointe déjà vers le bon projet.
-      // Pour utiliser une base de données nommée "flutter", vous devez d'abord la créer
-      // dans Firebase Console, puis utiliser: FirebaseFirestore.instanceFor(app: Firebase.app(), database: 'flutter')
       _db = FirebaseFirestore.instance;
       isConnected = true;
       print("✓ Firestore initialized successfully!");
-      print("✓ Connexion à Firebase établie");
-      print("ℹ️ Le projet Firebase est configuré via google-services.json / GoogleService-Info.plist");
 
-      // Optional: Check connection by fetching a count (costs 1 read)
       try {
         AggregateQuerySnapshot countSnapshot = await db.collection(userCollectionName).count().get();
         print("✓ Users in database: ${countSnapshot.count}");
@@ -56,17 +41,14 @@ class MongoDatabase {
     }
   }
 
-  /// Create default users (Admin, Client, Vendeur) in Firestore
   static Future<void> createDefaultUsers() async {
     try {
       final usersRef = db.collection(userCollectionName);
 
-      // Helper function to create user if not exists
       Future<void> createUserIfNotExists(String email, Map<String, dynamic> data) async {
         final query = await usersRef.where('email', isEqualTo: email).limit(1).get();
 
         if (query.docs.isEmpty) {
-          // Add a new document with an auto-generated ID
           await usersRef.add(data);
           print("✓ Created user: $email");
         } else {
@@ -106,17 +88,15 @@ class MongoDatabase {
     }
   }
 
-  /// Get all vendors from Firestore
   static Future<List<Map<String, dynamic>>> _getVendeurs() async {
     try {
       final snapshot = await db.collection(userCollectionName)
           .where('role', isEqualTo: 'vendeur')
           .get();
 
-      // We attach the document ID to the data so we can reference it later
       return snapshot.docs.map((doc) {
         final data = doc.data();
-        data['_id'] = doc.id; // Store Firestore ID as _id for compatibility
+        data['_id'] = doc.id;
         return data;
       }).toList();
     } catch (e) {
@@ -125,12 +105,10 @@ class MongoDatabase {
     }
   }
 
-  /// Sync products from DummyJSON to Firestore
   static Future<void> syncProductsFromFakeStore() async {
     try {
       final productRef = db.collection(productCollectionName);
 
-      // Check if products already exist
       final countSnapshot = await productRef.count().get();
       if (countSnapshot.count! > 0) {
         print("ℹ️ Products already exist (${countSnapshot.count}), skipping import.");
@@ -143,14 +121,12 @@ class MongoDatabase {
         print("⚠️ No vendors found. Products will be created without owners.");
       }
 
-      // --- FETCHING DATA FROM API (Kept your exact logic) ---
       final allProducts = <Map<String, dynamic>>[];
       int productIndex = 0;
       const int limitPerPage = 100;
 
       print("🔄 Fetching products from DummyJSON...");
 
-      // Fetch Page 1 to get total
       final firstRes = await http.get(Uri.parse('https://dummyjson.com/products?limit=$limitPerPage&skip=0'));
       if (firstRes.statusCode != 200) throw Exception('API Error');
 
@@ -158,12 +134,10 @@ class MongoDatabase {
       final int total = firstData['total'];
       final int pages = (total / limitPerPage).ceil();
 
-      // Function to process a list of products
       void processProducts(List<dynamic> items) {
         for (final item in items) {
           final p = item as Map<String, dynamic>;
 
-          // Assign Vendor logic
           String? vendeurId, vendeurEmail, vendeurName;
           if (vendeurs.isNotEmpty) {
             final v = vendeurs[productIndex % vendeurs.length];
@@ -173,13 +147,11 @@ class MongoDatabase {
             if (vendeurName!.isEmpty) vendeurName = v['username'];
           }
 
-          // Image logic
           String imageUrl = p['thumbnail'] ?? '';
           if (p['images'] != null && (p['images'] as List).isNotEmpty) {
             imageUrl = (p['images'] as List)[0];
           }
 
-          // Discount logic
           double discount = (p['discountPercentage'] as num?)?.toDouble() ??
               (5.0 + ((productIndex * 11 + 17) % 26)).roundToDouble();
 
@@ -200,7 +172,7 @@ class MongoDatabase {
               'rate': (p['rating'] as num?)?.toDouble(),
               'count': 0,
             },
-            'createdAt': FieldValue.serverTimestamp(), // Firestore Timestamp
+            'createdAt': FieldValue.serverTimestamp(),
           });
           productIndex++;
         }
@@ -208,7 +180,6 @@ class MongoDatabase {
 
       processProducts(firstData['products']);
 
-      // Fetch remaining pages
       for (int page = 1; page < pages; page++) {
         final skip = page * limitPerPage;
         final res = await http.get(Uri.parse('https://dummyjson.com/products?limit=$limitPerPage&skip=$skip'));
@@ -220,10 +191,8 @@ class MongoDatabase {
 
       print("✓ Fetched ${allProducts.length} products. Uploading to Firestore...");
 
-      // --- UPLOADING TO FIRESTORE (BATCHED) ---
-      // Firestore batches are limited to 500 operations. We must chunk them.
       int uploadedCount = 0;
-      const int batchSize = 450; // Safe margin below 500
+      const int batchSize = 450;
 
       for (var i = 0; i < allProducts.length; i += batchSize) {
         final batch = db.batch();
@@ -231,7 +200,7 @@ class MongoDatabase {
         final chunk = allProducts.sublist(i, end);
 
         for (final product in chunk) {
-          final docRef = productRef.doc(); // Create new ID
+          final docRef = productRef.doc();
           batch.set(docRef, product);
         }
 
@@ -247,13 +216,11 @@ class MongoDatabase {
     }
   }
 
-  /// Assign existing products to vendors (Migration tool)
   static Future<void> _assignProductsToVendeurs() async {
     try {
       final vendeurs = await _getVendeurs();
       if (vendeurs.isEmpty) return;
 
-      // Find products without vendorId
       final snapshot = await db.collection(productCollectionName)
           .where('vendeurId', isNull: true)
           .get();
@@ -262,7 +229,6 @@ class MongoDatabase {
 
       print("🔄 Assigning ${snapshot.docs.length} orphaned products...");
 
-      // We must use batches again for updates
       WriteBatch batch = db.batch();
       int count = 0;
       int opCount = 0;
@@ -279,15 +245,13 @@ class MongoDatabase {
         count++;
         opCount++;
 
-        // Commit batch every 450 ops
         if (opCount >= 450) {
           await batch.commit();
-          batch = db.batch(); // Start new batch
+          batch = db.batch();
           opCount = 0;
         }
       }
 
-      // Commit remaining
       if (opCount > 0) await batch.commit();
 
       print("✓ Products assigned.");
@@ -305,7 +269,7 @@ class MongoDatabase {
 
       return snapshot.docs.map((doc) {
         final data = doc.data();
-        data['_id'] = doc.id; // Important: mapping ID back for UI
+        data['_id'] = doc.id;
         return data;
       }).toList();
     } catch (e) {
@@ -313,7 +277,6 @@ class MongoDatabase {
     }
   }
 
-  /// Update Product
   static Future<bool> updateProduct(String productId, Map<String, dynamic> updates) async {
     try {
       await db.collection(productCollectionName).doc(productId).update(updates);
@@ -324,7 +287,6 @@ class MongoDatabase {
     }
   }
 
-  /// Delete Product
   static Future<bool> deleteProduct(String productId) async {
     try {
       await db.collection(productCollectionName).doc(productId).delete();
@@ -337,13 +299,8 @@ class MongoDatabase {
 
   static void logout() {
     currentUser = null;
-    // Firebase has its own auth, you can also call:
-    // FirebaseAuth.instance.signOut();
   }
 
-  // ========== ADMIN METHODS ==========
-
-  /// Get all users
   static Future<List<Map<String, dynamic>>> getAllUsers() async {
     try {
       final snapshot = await db.collection(userCollectionName).get();
@@ -358,17 +315,15 @@ class MongoDatabase {
     }
   }
 
-  /// Create a new user
   static Future<bool> createUser(Map<String, dynamic> userData) async {
     try {
-      // Check if email already exists
       final existing = await db.collection(userCollectionName)
           .where('email', isEqualTo: userData['email'])
           .limit(1)
           .get();
       
       if (existing.docs.isNotEmpty) {
-        return false; // Email already exists
+        return false;
       }
 
       await db.collection(userCollectionName).add(userData);
@@ -379,7 +334,6 @@ class MongoDatabase {
     }
   }
 
-  /// Update user
   static Future<bool> updateUser(String userId, Map<String, dynamic> updates) async {
     try {
       await db.collection(userCollectionName).doc(userId).update(updates);
@@ -390,7 +344,6 @@ class MongoDatabase {
     }
   }
 
-  /// Delete user
   static Future<bool> deleteUser(String userId) async {
     try {
       await db.collection(userCollectionName).doc(userId).delete();
@@ -401,7 +354,6 @@ class MongoDatabase {
     }
   }
 
-  /// Get all categories
   static Future<List<Map<String, dynamic>>> getAllCategories() async {
     try {
       final snapshot = await db.collection(categoryCollectionName)
@@ -415,9 +367,7 @@ class MongoDatabase {
       print("✓ ${categories.length} catégories trouvées dans la collection 'categories'");
       return categories;
     } catch (e) {
-      // Si la collection n'existe pas ou est vide, ce n'est pas une erreur
       if (e.toString().contains('index') || e.toString().contains('orderBy')) {
-        // Essayer sans orderBy si l'index n'existe pas
         try {
           final snapshot = await db.collection(categoryCollectionName).get();
           final categories = snapshot.docs.map((doc) {
@@ -437,17 +387,15 @@ class MongoDatabase {
     }
   }
 
-  /// Create category
   static Future<bool> createCategory(Map<String, dynamic> categoryData) async {
     try {
-      // Check if category name already exists
       final existing = await db.collection(categoryCollectionName)
           .where('name', isEqualTo: categoryData['name'])
           .limit(1)
           .get();
       
       if (existing.docs.isNotEmpty) {
-        return false; // Category already exists
+        return false;
       }
 
       categoryData['createdAt'] = FieldValue.serverTimestamp();
@@ -459,7 +407,6 @@ class MongoDatabase {
     }
   }
 
-  /// Update category
   static Future<bool> updateCategory(String categoryId, Map<String, dynamic> updates) async {
     try {
       updates['updatedAt'] = FieldValue.serverTimestamp();
@@ -471,7 +418,6 @@ class MongoDatabase {
     }
   }
 
-  /// Delete category
   static Future<bool> deleteCategory(String categoryId) async {
     try {
       await db.collection(categoryCollectionName).doc(categoryId).delete();
@@ -482,27 +428,22 @@ class MongoDatabase {
     }
   }
 
-  /// Get all products (admin view)
   static Future<List<Map<String, dynamic>>> getAllProducts() async {
     try {
       print("🔄 Début du chargement des produits depuis Firebase...");
       
-      // Charger tous les produits sans orderBy pour éviter les problèmes d'index
       final snapshot = await db.collection(productCollectionName).get();
       
       print("📊 ${snapshot.docs.length} documents trouvés dans la collection 'products'");
       
       final products = snapshot.docs.map((doc) {
         final data = doc.data();
-        // Utiliser l'ID du document Firestore comme _id
         data['_id'] = doc.id;
         
-        // Si mongoId existe, on peut le garder aussi
         if (data['mongoId'] == null) {
           data['mongoId'] = doc.id;
         }
         
-        // S'assurer que tous les champs nécessaires existent
         if (data['category'] == null) {
           data['category'] = '';
         }
@@ -516,7 +457,6 @@ class MongoDatabase {
         return data;
       }).toList();
       
-      // Trier manuellement par createdAt si disponible, sinon par _id
       products.sort((a, b) {
         final aDate = a['createdAt'];
         final bDate = b['createdAt'];
@@ -524,11 +464,9 @@ class MongoDatabase {
           try {
             return (bDate as Comparable).compareTo(aDate);
           } catch (e) {
-            // Si la comparaison échoue, trier par ID
             return (b['_id'] as String).compareTo(a['_id'] as String);
           }
         }
-        // Trier par ID si pas de date
         return (b['_id'] as String).compareTo(a['_id'] as String);
       });
       
@@ -546,7 +484,6 @@ class MongoDatabase {
     }
   }
 
-  /// Create product (admin)
   static Future<bool> createProduct(Map<String, dynamic> productData) async {
     try {
       productData['createdAt'] = FieldValue.serverTimestamp();
@@ -558,7 +495,6 @@ class MongoDatabase {
     }
   }
 
-  /// Get statistics for admin dashboard
   static Future<Map<String, int>> getAdminStatistics() async {
     try {
       final usersSnapshot = await db.collection(userCollectionName).count().get();

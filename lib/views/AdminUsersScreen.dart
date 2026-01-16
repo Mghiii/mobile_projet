@@ -459,7 +459,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           color: Colors.black,
           child: Column(
             children: [
-          // Search and filter bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: Colors.black,
@@ -534,7 +533,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               ],
             ),
           ),
-          // Users list
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())

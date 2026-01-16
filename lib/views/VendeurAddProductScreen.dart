@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:miniprojet/services/database.dart';
 
@@ -42,7 +42,6 @@ class _VendeurAddProductScreenState extends State<VendeurAddProductScreen> {
       return;
     }
 
-    // UPDATED: Check for current user only (Firestore db is always initialized)
     if (MongoDatabase.currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -60,9 +59,7 @@ class _VendeurAddProductScreenState extends State<VendeurAddProductScreen> {
     try {
       final currentUser = MongoDatabase.currentUser!;
 
-      // Prepare User Data
       final vendeurEmail = currentUser['email']?.toString();
-      // Ensure we treat the ID as a string
       final vendeurId = currentUser['_id']?.toString();
       final firstName = currentUser['firstName']?.toString() ?? '';
       final lastName = currentUser['lastName']?.toString() ?? '';
@@ -88,14 +85,10 @@ class _VendeurAddProductScreenState extends State<VendeurAddProductScreen> {
         },
         'vendeurId': vendeurId,
         'vendeurEmail': vendeurEmail,
-        // Fallback to username if name is empty
         'vendeurName': vendeurName.isNotEmpty ? vendeurName : currentUser['username']?.toString(),
-
-        // UPDATED: Use Firestore Server Timestamp
         'createdAt': FieldValue.serverTimestamp(),
       };
 
-      // UPDATED: Firestore command to add document
       await MongoDatabase.db.collection('products').add(newProduct);
 
       if (mounted) {
@@ -275,7 +268,6 @@ class _VendeurAddProductScreenState extends State<VendeurAddProductScreen> {
                       if (value == null || value.trim().isEmpty) {
                         return 'L\'URL de l\'image est requise';
                       }
-                      // Basic URL validation
                       if (!value.startsWith('http')) {
                         return 'URL invalide (doit commencer par http)';
                       }

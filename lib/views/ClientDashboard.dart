@@ -24,7 +24,6 @@ class _ClientDashboardState extends State<ClientDashboard> {
   String _searchQuery = '';
   bool _isSearching = false;
   
-  // Pagination
   final int _itemsPerPage = 12;
   int _currentPage = 0;
   
